@@ -237,6 +237,10 @@ await coinbasePremium();
 await bgeometrics();
 await mempool();
 meta.updated = now;
+// drop status entries for series no longer fetched (keeps Data status clean)
+for (const k of Object.keys(meta.metrics)) {
+  if ((k.startsWith("cm-") && !CM.includes(k.slice(3))) || (k.startsWith("bg-") && !BG.includes(k.slice(3)) && !meta.metrics[k].ok)) delete meta.metrics[k];
+}
 fs.writeFileSync(metaPath, JSON.stringify(meta, null, 1));
 const ok = Object.values(meta.metrics).filter((m) => m.ok).length;
 console.log(`Done: ${ok}/${Object.keys(meta.metrics).length} metrics OK`);
