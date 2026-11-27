@@ -23,6 +23,16 @@ Q = {
       ON i.spent_transaction_hash = o.transaction_hash AND i.spent_output_index = o.index
       WHERE i.block_timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 14 DAY)
       GROUP BY sd, cd""",
+ "addr_bands (single-address deltas, balance histogram per day)":
+  f"""WITH x AS (
+        SELECT a addr, DATE(block_timestamp) d, value v FROM {D}.outputs`, UNNEST(addresses) a WHERE ARRAY_LENGTH(addresses)=1
+        UNION ALL
+        SELECT a, DATE(block_timestamp), -value FROM {D}.inputs`, UNNEST(addresses) a WHERE ARRAY_LENGTH(addresses)=1),
+      dd AS (SELECT addr, d, SUM(v) dv FROM x GROUP BY addr, d),
+      b AS (SELECT addr, d, dv, SUM(dv) OVER (PARTITION BY addr ORDER BY d) after FROM dd)
+      SELECT d, CAST(FLOOR(LOG10(GREATEST(after,1))*10) AS INT64) bin, COUNT(*) n FROM b GROUP BY d, bin""",
+ "addr_activity (active addrs, new addrs per day)":
+  f"""SELECT DATE(block_timestamp) d, COUNT(DISTINCT a) active FROM {D}.outputs`, UNNEST(addresses) a GROUP BY d""",
 }
 
 c = bigquery.Client(project=PROJECT)
