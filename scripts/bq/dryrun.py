@@ -39,6 +39,9 @@ Q = {
 }
 
 c = bigquery.Client(project=PROJECT)
+for t in ("outputs","inputs","transactions"):
+    tb = c.get_table(f"bigquery-public-data.crypto_bitcoin.{t}")
+    print("SCHEMA", t, [f"{f.name}:{f.field_type}" for f in tb.schema], "partition:", tb.time_partitioning and tb.time_partitioning.field)
 cfg = bigquery.QueryJobConfig(dry_run=True, use_query_cache=False)
 out, lines = {}, []
 for name, sql in Q.items():
