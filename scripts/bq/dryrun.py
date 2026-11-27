@@ -16,14 +16,12 @@ Q = {
       GROUP BY sd, cd""",
  "refresh_created (last 14 days of outputs)":
   f"""SELECT DATE(block_timestamp) d, SUM(value) v, COUNT(*) n FROM {D}.outputs`
-      WHERE block_timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 14 DAY)
-        AND block_timestamp_month >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 14 DAY), MONTH) GROUP BY d""",
+      WHERE block_timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 14 DAY) GROUP BY d""",
  "refresh_spent (last 14 days of inputs x all outputs)":
   f"""SELECT DATE(i.block_timestamp) sd, DATE(o.block_timestamp) cd, SUM(i.value) v, COUNT(*) n
       FROM {D}.inputs` i JOIN {D}.outputs` o
       ON i.spent_transaction_hash = o.transaction_hash AND i.spent_output_index = o.index
       WHERE i.block_timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 14 DAY)
-        AND i.block_timestamp_month >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 14 DAY), MONTH)
       GROUP BY sd, cd""",
 }
 
