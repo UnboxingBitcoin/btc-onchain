@@ -12,7 +12,7 @@ on:
         type: boolean
         default: false
 concurrency:
-  group: data-branch
+  group: onchain
   cancel-in-progress: false
 permissions:
   contents: write
