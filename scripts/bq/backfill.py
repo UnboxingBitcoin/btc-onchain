@@ -17,10 +17,10 @@ GS = "DATE '2009-01-03'"
 P = "`bigquery-public-data.crypto_bitcoin"
 
 def cube_sql(cb=True, ty=True):
-    cb_col = "IF(t.hash IS NOT NULL, 1, 0)" if cb else "0"
+    cb_col = "IF(t.h IS NOT NULL, 1, 0)" if cb else "0"
     ty_col = """CASE o.type WHEN 'pubkey' THEN 0 WHEN 'pubkeyhash' THEN 1 WHEN 'scripthash' THEN 2
        WHEN 'witness_v0_keyhash' THEN 3 WHEN 'witness_v0_scripthash' THEN 3 WHEN 'witness_v1_taproot' THEN 4 ELSE 5 END""" if ty else "5"
-    cb_join = f"LEFT JOIN (SELECT hash FROM {P}.transactions` WHERE is_coinbase) t ON t.hash = o.transaction_hash" if cb else ""
+    cb_join = f"LEFT JOIN (SELECT `hash` AS h FROM {P}.transactions` WHERE is_coinbase) t ON t.h = o.transaction_hash" if cb else ""
     return f"""
 SELECT
   DATE(o.block_timestamp) AS cd,
