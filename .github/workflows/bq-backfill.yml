@@ -1,0 +1,54 @@
+name: bq-backfill
+on:
+  workflow_dispatch:
+    inputs:
+      step:
+        description: "query = ONE guarded BigQuery scan (uses quota); compute = rebuild metrics from the saved cube (almost free)"
+        type: choice
+        options: [query, compute]
+        default: query
+      force:
+        description: "FORCE=1 rebuilds the cube even if it exists (uses quota again)"
+        type: boolean
+        default: false
+concurrency:
+  group: data-branch
+  cancel-in-progress: false
+permissions:
+  contents: write
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    env:
+      GCP_PROJECT: gen-lang-client-0277591498
+      FORCE: ${{ inputs.force && '1' || '0' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install google-cloud-bigquery google-cloud-bigquery-storage db-dtypes pyarrow pandas numpy requests
+      - name: Run
+        working-directory: scripts/bq
+        run: python backfill.py ${{ inputs.step }} "$GITHUB_WORKSPACE/out_u"
+      - name: Publish to data branch
+        if: inputs.step == 'compute'
+        run: |
+          git clone --depth 1 --branch data "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" dbranch
+          mkdir -p dbranch/u dbranch/csv
+          cp -r out_u/u/. dbranch/u/ && cp -r out_u/csv/. dbranch/csv/
+          cd dbranch
+          git config user.name "github-actions" && git config user.email "actions@users.noreply.github.com"
+          git add -A && (git diff --cached --quiet || git commit -qm "UTXO metrics $(date -u +%F)")
+          git push origin data
+      - name: Save cube parquet as a release asset
+        if: inputs.step == 'compute'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view utxo-cube >/dev/null 2>&1 || gh release create utxo-cube --title "UTXO cube" --notes "Compressed (created day x spent day) BTC matrix, rebuilt by bq-backfill."
+          gh release upload utxo-cube out_u/core.parquet --clobber

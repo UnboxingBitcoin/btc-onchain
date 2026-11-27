@@ -1,12 +1,15 @@
 """BigQuery DRY RUN only. Reads no data and costs nothing: reports bytes each query WOULD scan."""
 import json, os, sys
+sys.path.insert(0, os.path.dirname(__file__))
 from google.cloud import bigquery
+from backfill import CUBE_SQL
 
 PROJECT = os.environ["GCP_PROJECT"]
 D = "`bigquery-public-data.crypto_bitcoin"
 TIB = 1024 ** 4
 
 Q = {
+ "CUBE (single labelled query: the real backfill)": CUBE_SQL,
  "backfill_created (outputs: day, value)":
   f"SELECT DATE(block_timestamp) d, SUM(value) v, COUNT(*) n FROM {D}.outputs` GROUP BY d",
  "backfill_spent (inputs x outputs: spend day, created day, value)":

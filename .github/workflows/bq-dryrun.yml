@@ -13,5 +13,5 @@ jobs:
       - uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
-      - run: pip install google-cloud-bigquery
+      - run: pip install google-cloud-bigquery google-cloud-bigquery-storage db-dtypes pyarrow pandas numpy requests
       - run: python scripts/bq/dryrun.py
