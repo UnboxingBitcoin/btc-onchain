@@ -27,3 +27,9 @@ Derived in the page: realized price, MVRV Z-score, Mayer multiple, 200-week MA, 
 Setup: create a Google Cloud project and a service account with the BigQuery Job User role. Save its JSON key as the repo secret `GCP_SA_KEY`. Run one backfill, then incremental daily queries to stay inside the 1 TB/month free query tier.
 
 Not investment advice.
+
+## UTXO (self-computed) section
+
+Built from the public BigQuery Bitcoin tables, inside the free sandbox (1 TiB/month). One guarded query (`scripts/bq/backfill.py query`, 0.77 TiB, run once) saves a created-day x spent-day cube to your own BigQuery dataset. `compute` then rebuilds every metric from that cube plus the Coin Metrics daily price for almost no quota, validates MVRV and supply against Coin Metrics, and publishes `u/*.json` and `csv/utxo_daily.csv` to the `data` branch. The compressed cube is kept as the `utxo-cube` release asset. Metrics: realized cap/price, MVRV, Z-score, NUPL, SOPR (all, adjusted, STH, LTH), realized profit/loss, CDD, VDD, dormancy, liveliness, STH/LTH split at 155 days, HODL waves, supply by UTXO size and script type, miner (coinbase) spending, cost-basis distribution.
+
+Google Sheets: `=IMPORTDATA("https://raw.githubusercontent.com/UnboxingBitcoin/btc-onchain/data/csv/utxo_daily.csv")`

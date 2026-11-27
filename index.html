@@ -240,7 +240,7 @@ function redrawAll(){charts.forEach(draw)}
 const box=(title,lead,o={})=>`<div class="cbox" ${o.id?`id="${o.id}"`:""}><h3>${esc(title)}</h3>${lead?`<div class="lead">${lead}</div>`:""}<div class="fig" style="${o.h?`height:${o.h}px`:""}"></div><div class="legend"></div><div class="readout"></div></div>`;
 
 /* ---------- layout ---------- */
-const SECTIONS=[["snap","Snapshot"],["val","Valuation"],["pnl","Profit & loss"],["hold","Holders"],["flow","Flows"],["mine","Miners"],["net","Network"],["deriv","Derivatives"],["live","Live mempool"],["data","Data status"]];
+const SECTIONS=[["snap","Snapshot"],["val","Valuation"],["pnl","Profit & loss"],["hold","Holders"],["utxo","UTXO (self-computed)"],["flow","Flows"],["mine","Miners"],["net","Network"],["deriv","Derivatives"],["live","Live mempool"],["data","Data status"]];
 $("nav").innerHTML=SECTIONS.map(([k,n])=>`<a class="chip" href="#${k}">${n}</a>`).join("");
 $("range").innerHTML=["1Y","2Y","4Y","ALL"].map(r=>`<button class="chip${r===RANGE?" on":""}" data-r="${r}">${r}</button>`).join("");
 $("range").addEventListener("click",e=>{const b=e.target.closest("[data-r]");if(!b)return;RANGE=b.dataset.r;store.range=RANGE;saveP();[...$("range").children].forEach(x=>x.classList.toggle("on",x===b));redrawAll()});
@@ -255,6 +255,10 @@ async function base(){
   return {price,mc,rc,sply,rp,mvrv,z:stdz(mc,rc)};
 }
 let B;
+let UMETA=null;const ucache={};
+function ug(g){return ucache[g]||(ucache[g]=fetch(DATA+"u/"+g+".json?v="+(UMETA?.updated||"")).then(r=>r.ok?r.json():null).catch(()=>null))}
+async function U(g,c){return col(await ug(g),c)}
+const addS=(...a)=>{a=a.filter(Boolean);return a.length?a.reduce((x,y)=>combine(x,y,(p,q)=>p+q)):null};
 async function profitPct(){const [a,b]=await Promise.all([S("bg-supply-profit"),S("bg-supply-loss")]);return combine(a,b,(x,y)=>x/(x+y)*100)}
 const R={
 async snap(el){
@@ -321,6 +325,79 @@ async hold(el){
   const cs=await Promise.all(CO.map(([id])=>S("bg-"+id)));
   const rows=CO.map(([,n],i)=>{const s=cs[i];if(!s)return"";const l=last(s),a30=ago(s,30),a90=ago(s,90);const d=(x)=>x==null?"—":`<span class="${l-x>=0?"z-good":"z-bad"}">${l-x>=0?"+":"−"}${num(Math.abs(l-x),0)}</span>`;return`<tr><td>${n}</td><td class="n">${btc(l)}</td><td class="n">${d(a30)}</td><td class="n">${d(a90)}</td></tr>`}).join("");
   $("coh").innerHTML=`<h3>Supply by wallet size</h3><div class="lead">BTC held by address balance band. Exchanges and ETFs sit in the large bands.</div>`+(rows?`<table><thead><tr><th>Band</th><th class="n">Holds</th><th class="n">30d</th><th class="n">90d</th></tr></thead><tbody>${rows}</tbody></table>`:`<div class="empty">No data yet — appears after the next data run.</div>`);
+},
+async utxo(el){
+  if(!UMETA){el.innerHTML=`<div class="empty">UTXO data is not published yet.</div>`;return}
+  const v=UMETA.validation||{},fx=x=>x==null?"?":x.toFixed(2);
+  el.innerHTML=`<div class="notice"><span class="dot"></span>Computed here from every Bitcoin transaction (BigQuery public dataset), not from a data vendor. MVRV matches Coin Metrics within ${fx(v.mvrv_median_abs_pct)}% (median, last 4 years). There is no exchange or entity clustering, so SOPR and CDD are a little noisier than adjusted versions. Refreshed monthly, last day ${fdate(UMETA.last_day)}.</div><div id="uk"></div>`
+   +box("Price vs cost bases","Price against the average cost of all coins (realized), recent buyers (STH, under 155 days) and long-term holders.",{id:"u-cb",h:260})
+   +box("MVRV","Market cap ÷ realized cap, for all coins, recent buyers and long-term holders.",{id:"u-mvrv"})
+   +box("MVRV Z-score","Standard deviations between market cap and realized cap.",{id:"u-z"})
+   +box("NUPL","Net unrealized profit or loss as a share of market cap.",{id:"u-nupl"})
+   +box("SOPR (7-day average)","Above 1 coins move at a profit, below 1 at a loss. Adjusted drops coins created and spent the same day.",{id:"u-sopr"})
+   +box("Long-term holder SOPR (7-day average)","Coins held over 155 days. Spikes mean old coins sold at a large profit.",{id:"u-lso"})
+   +box("Net realized profit / loss (30-day average)","USD gained or lost on coins that moved. Green is profit taking, red is loss taking.",{id:"u-pl"})
+   +box("Realized profit vs loss (30-day average)","Profit and loss on moved coins, separately.",{id:"u-pl2"})
+   +box("Coin days destroyed (30-day average)","Spikes mean old coins are moving.",{id:"u-cdd"})
+   +box("Value days destroyed (30-day average)","Coin days weighted by the price when they move.",{id:"u-vdd"})
+   +box("STH vs LTH supply","BTC last moved under 155 days ago, versus older.",{id:"u-sth"})
+   +`<div id="uw"></div>`
+   +box("Supply last moved over 1, 3, 5 and 10 years ago","Share of supply that has not moved for at least that long.",{id:"u-old"})
+   +box("Liveliness","Cumulative coin days destroyed ÷ cumulative coin days created. Rises as old coins are spent.",{id:"u-live"})
+   +`<div id="ub"></div><div id="ut"></div><div id="ur"></div>`
+   +box("Miner coins spent per day (30-day average)","BTC from coinbase outputs spent each day.",{id:"u-mn1"})
+   +box("Miner SOPR (30-day average)","SOPR for coinbase coins only. Below 1 means miners are selling under their coin's cost basis.",{id:"u-mn2"});
+  const [pr,rp,mv,zz,nu,sup,sr,lr,smv,lmv,ssup,lsup,pip,ag,lv,so,aso,sso,lso,np,rpf,rls,cdd,vdd,mcs,msp]=await Promise.all([
+    U("val","price"),U("val","realized_price"),U("val","mvrv"),U("val","mvrv_z"),U("val","nupl"),U("val","supply"),
+    U("holders","sth_rp"),U("holders","lth_rp"),U("holders","sth_mvrv"),U("holders","lth_mvrv"),U("holders","sth_supply"),U("holders","lth_supply"),U("holders","pct_in_profit"),U("holders","avg_age"),U("holders","liveliness"),
+    U("spent","sopr"),U("spent","asopr"),U("spent","sth_sopr"),U("spent","lth_sopr"),U("spent","net_realized_pl"),U("spent","realized_profit"),U("spent","realized_loss"),U("spent","cdd"),U("spent","vdd"),U("miners","cb_spent"),U("miners","cb_sopr")]);
+  const p=last(pr),kp=(l,val,sub)=>`<div class="kpi"><span>${l}</span><b>${val}</b>${sub||""}</div>`,vs=(a,b)=>a&&b?`<i class="z-n">${a>=b?"+":"−"}${Math.abs((a/b-1)*100).toFixed(0)}% vs price</i>`:"";
+  $("uk").innerHTML=`<div class="kpis">${kp("Realized price",usd(last(rp)),vs(last(rp),p))}${kp("STH cost basis",usd(last(sr)),vs(last(sr),p))}${kp("LTH cost basis",usd(last(lr)),vs(last(lr),p))}${kp("MVRV",last(mv)==null?"—":last(mv).toFixed(2),zone("mvrv",last(mv)))}${kp("MVRV Z-score",last(zz)==null?"—":last(zz).toFixed(2),zone("z",last(zz)))}${kp("NUPL",last(nu)==null?"—":last(nu).toFixed(2),zone("nupl",last(nu)))}${kp("STH MVRV",last(smv)==null?"—":last(smv).toFixed(2),zone("sthmvrv",last(smv)))}${kp("Supply in profit",pct(last(pip)),zone("profit",last(pip)))}${kp("Average coin age",last(ag)==null?"—":(last(ag)/365).toFixed(1)+" yr")}</div>`;
+  chart($("u-cb"),[{name:"Price",d:pr},{name:"Realized",d:rp},{name:"STH",d:sr},{name:"LTH",d:lr}],{log:"auto",fmt:x=>usd(x,0)});
+  chart($("u-mvrv"),[{name:"MVRV",d:mv},{name:"STH",d:smv},{name:"LTH",d:lmv}],{refs:[{y:1,label:"1.0 cost basis"},{y:3.5,label:"3.5 heated"}],fmt:x=>x.toFixed(2)});
+  chart($("u-z"),[{name:"Z-score",d:zz}],{refs:[{y:0,label:"0"},{y:7,label:"7 top zone"}],fmt:x=>x.toFixed(1)});
+  chart($("u-nupl"),[{name:"NUPL",d:nu}],{refs:[{y:0,label:"0"},{y:.75,label:"0.75 euphoria"}],fmt:x=>x.toFixed(2)});
+  chart($("u-sopr"),[{name:"SOPR",d:sma(so,7)},{name:"Adjusted",d:sma(aso,7)},{name:"STH",d:sma(sso,7)}],{refs:[{y:1,label:"1.0"}],fmt:x=>x.toFixed(3)});
+  chart($("u-lso"),[{name:"LTH SOPR",d:sma(lso,7)}],{log:"auto",refs:[{y:1,label:"1.0"}],fmt:x=>x.toFixed(2)});
+  chart($("u-pl"),[{name:"Net realized P/L",d:sma(np,30)}],{bars:true,zero:true,fmt:x=>usd(x,0)});
+  chart($("u-pl2"),[{name:"Profit",d:sma(rpf,30)},{name:"Loss",d:sma(rls,30)}],{log:"auto",fmt:x=>usd(x,0)});
+  chart($("u-cdd"),[{name:"CDD 30d",d:sma(cdd,30)}],{fmt:x=>num(x,0)});
+  chart($("u-vdd"),[{name:"VDD 30d",d:sma(vdd,30)}],{fmt:x=>usd(x,0)});
+  chart($("u-sth"),[{name:"STH supply",d:ssup},{name:"LTH supply",d:lsup}],{fmt:x=>num(x,1)});
+  chart($("u-live"),[{name:"Liveliness",d:lv}],{fmt:x=>x.toFixed(3)});
+  chart($("u-mn1"),[{name:"Coinbase BTC spent 30d",d:sma(mcs,30)}],{fmt:x=>num(x,0)});
+  chart($("u-mn2"),[{name:"Miner SOPR 30d",d:sma(msp,30)}],{refs:[{y:1,label:"1.0"}],fmt:x=>x.toFixed(3)});
+  // HODL waves + older-than lines
+  const wd=await ug("waves");
+  if(wd&&wd.rows.length){
+    const r=wd.rows.at(-1),o=wd.rows.find(x=>x[0]>=r[0]-90)||wd.rows[0],L={lt1d:"< 1 day","1d_1w":"1d – 1w","1w_1m":"1w – 1m","1m_3m":"1 – 3 mo","3m_6m":"3 – 6 mo","6m_1y":"6 mo – 1 yr","1y_2y":"1 – 2 yr","2y_3y":"2 – 3 yr","3y_5y":"3 – 5 yr","5y_7y":"5 – 7 yr","7y_10y":"7 – 10 yr",gt10y:"10 yr +"};
+    const vals=wd.cols.map((c,i)=>[c.slice(2),r[i+1],o[i+1]]).filter(x=>x[1]!=null),mx=Math.max(...vals.map(x=>x[1]));
+    $("uw").innerHTML=`<h3>HODL waves</h3><div class="lead">Share of supply by age since last move, ${fdate(r[0])}. Change vs 90 days earlier.</div><div class="bars">${vals.map(([c,x,ov])=>`<div class="r"><span>${esc(L[c]||c)}</span><div class="bar"><i style="width:${(x/mx*100).toFixed(1)}%"></i></div><b>${pct(x)}<br><i class="${x-ov>=0?"z-good":"z-bad"}" style="font-style:normal">${x-ov>=0?"+":"−"}${Math.abs(x-ov).toFixed(1)}</i></b></div>`).join("")}</div>`;
+    const W=n=>col(wd,"w_"+n);
+    chart($("u-old"),[{name:"> 1 yr",d:addS(W("1y_2y"),W("2y_3y"),W("3y_5y"),W("5y_7y"),W("7y_10y"),W("gt10y"))},{name:"> 3 yr",d:addS(W("3y_5y"),W("5y_7y"),W("7y_10y"),W("gt10y"))},{name:"> 5 yr",d:addS(W("5y_7y"),W("7y_10y"),W("gt10y"))},{name:"> 10 yr",d:W("gt10y")}],{fmt:x=>x.toFixed(1)+"%"});
+  }else $("uw").innerHTML=`<h3>HODL waves</h3><div class="empty">No data.</div>`;
+  // tables: wallet-size bands and script types
+  const tbl=async(id,title,lead,g,keys,labels)=>{
+    const d=await ug(g);if(!d||!d.rows.length){$(id).innerHTML="";return}
+    const r=d.rows.at(-1),o=d.rows.find(x=>x[0]>=r[0]-30)||d.rows[0];
+    const rows=keys.map(k=>{const i=d.cols.indexOf(k);if(i<0)return"";const a=r[i+1],b=o[i+1];return{k,a,b}}).filter(x=>x&&x.a!=null);
+    const tot=rows.reduce((t,x)=>t+x.a,0);
+    $(id).innerHTML=`<h3>${title}</h3><div class="lead">${lead}</div><table><thead><tr><th>${g==="bands"?"UTXO size":"Script"}</th><th class="n">Holds</th><th class="n">Share</th><th class="n">30d</th></tr></thead><tbody>${rows.map(x=>{const dl=x.b==null?null:x.a-x.b;return`<tr><td>${esc(labels[x.k]||x.k)}</td><td class="n">${btc(x.a)}</td><td class="n">${pct(x.a/tot*100)}</td><td class="n">${dl==null?"—":`<span class="${dl>=0?"z-good":"z-bad"}">${dl>=0?"+":"−"}${num(Math.abs(dl),0)}</span>`}</td></tr>`}).join("")}</tbody></table>`};
+  await tbl("ub","Supply by UTXO size","BTC held in outputs of each size, ignoring which wallet they sit in. Large outputs are mostly exchanges, funds and old coins.","bands",["sup_lt0.1","sup_0.1_1","sup_1_10","sup_10_100","sup_100_1k","sup_gt1k"],{"sup_lt0.1":"< 0.1 ₿","sup_0.1_1":"0.1 – 1 ₿","sup_1_10":"1 – 10 ₿","sup_10_100":"10 – 100 ₿","sup_100_1k":"100 – 1K ₿","sup_gt1k":"1K+ ₿"});
+  await tbl("ut","Supply by script type","P2PK outputs are the 2009–2011 era, so that row is mostly old and dormant coins.","types",["sup_p2pk","sup_p2pkh","sup_p2sh","sup_segwit_v0","sup_taproot","sup_other"],{sup_p2pk:"P2PK (oldest)",sup_p2pkh:"P2PKH (legacy)",sup_p2sh:"P2SH (wrapped / multisig)",sup_segwit_v0:"SegWit v0 (bc1q)",sup_taproot:"Taproot (bc1p)",sup_other:"Other / bare multisig"});
+  // cost-basis distribution
+  try{
+    const ud=await fetch(DATA+"u/urpd.json?v="+(UMETA.updated||"")).then(r=>r.ok?r.json():null);
+    if(ud&&ud.snaps.length){
+      const sn=ud.snaps,cur=sn.at(-1),old=sn.find(x=>x.day>=cur.day-360)||sn[0],E=ud.edges,n=cur.v.length;
+      const lo=Math.max(E.findIndex(e=>e>=1),0),hi=Math.min(E.findIndex(e=>e>=p*2.2),n-1),mx=Math.max(...cur.v.slice(lo,hi+1)),Wd=340,Hd=150,bw=Wd/(hi-lo+1);
+      const pi=E.findIndex(e=>e>=p)-1,X=i=>(i-lo)*bw;
+      const bars=cur.v.slice(lo,hi+1).map((x,j)=>`<rect x="${(j*bw).toFixed(1)}" y="${(Hd-x/mx*Hd).toFixed(1)}" width="${Math.max(bw-.4,.6).toFixed(1)}" height="${(x/mx*Hd).toFixed(1)}" fill="${lo+j<=pi?"var(--c3)":"var(--c2)"}"/>`).join("");
+      const oldp=old.v.slice(lo,hi+1).map((x,j)=>`${(j*bw+bw/2).toFixed(1)},${(Hd-Math.min(x/mx,1)*Hd).toFixed(1)}`).join(" ");
+      const lab=i=>usd(E[Math.min(i,E.length-1)],0);
+      $("ur").innerHTML=`<h3>Cost-basis distribution</h3><div class="lead">Where today's supply was last bought, by price paid. Green sits in profit, red in loss. Black line is the same chart a year ago. Coins bought under $1 are left off.</div><svg viewBox="0 0 ${Wd} ${Hd+18}" style="width:100%;height:auto;display:block">${bars}<polyline points="${oldp}" fill="none" stroke="var(--ink)" stroke-width="1.4"/><line x1="${X(pi+.5).toFixed(1)}" x2="${X(pi+.5).toFixed(1)}" y1="0" y2="${Hd}" stroke="var(--ink)" stroke-width="2" stroke-dasharray="4 3"/><text x="2" y="${Hd+13}" font-size="9" fill="var(--muted)">${lab(lo)}</text><text x="${Math.min(Math.max(X(pi+.5),40),Wd-40).toFixed(1)}" y="${Hd+13}" font-size="9" text-anchor="middle" fill="var(--ink)">now ${usd(p,0)}</text></svg>`;
+    }else $("ur").innerHTML="";
+  }catch(e){$("ur").innerHTML=""}
 },
 async flow(el){
   el.innerHTML=box("Exchange net flow (7-day avg, USD)","Outflows minus inflows across tracked exchanges. Green bars = net withdrawals (coins leaving), red = net deposits.",{id:"c-xf"})+box("BTC on exchanges","Coin Metrics exchange supply.",{id:"c-xs"})+box("Spot ETF daily flow (BTC)","",{id:"c-etf"})+box("BTC held by ETFs","",{id:"c-etfh"})+box("Stablecoin supply","Dry powder that can rotate into BTC.",{id:"c-stb"});
@@ -390,11 +467,12 @@ async data(el){
 async function boot(){
   try{META=await fetch(DATA+"meta.json?t="+Date.now()).then(r=>r.ok?r.json():null)}catch(e){}
   $("asof").textContent=META?.updated?"Updated "+new Date(META.updated).toLocaleString("en-GB",{weekday:"short",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):"Waiting for first data run";
+  try{UMETA=await fetch(DATA+"u/meta.json?t="+Date.now()).then(r=>r.ok?r.json():null)}catch(e){}
   B=await base();
   const run=async k=>{try{await R[k](body(k))}catch(e){console.error(k,e);body(k).innerHTML=`<div class="empty">Couldn't draw this section.</div>`}};
   run("snap");run("live");run("data");
   const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){io.unobserve(e.target);run(e.target.id)}}),{rootMargin:"400px"});
-  ["val","pnl","hold","flow","mine","net","deriv"].forEach(k=>io.observe($(k)));
+  ["val","pnl","hold","utxo","flow","mine","net","deriv"].forEach(k=>io.observe($(k)));
 }
 applyTheme((()=>{try{return localStorage.getItem("oc-theme")}catch(e){return null}})());
 document.addEventListener("gesturestart",e=>e.preventDefault());
