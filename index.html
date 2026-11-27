@@ -81,6 +81,16 @@ td.n,th.n{text-align:right;font-family:"Space Mono",monospace;white-space:nowrap
 .legend{display:flex;flex-wrap:wrap;gap:4px 12px;font-family:"Space Mono",monospace;font-size:11.5px;margin-top:4px}
 .legend span{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
 .legend svg{width:22px;height:8px}
+.dr{position:relative;height:26px;margin:2px 2px 0}
+.dr .tk{position:absolute;left:0;right:0;top:9px;height:8px;border:2px solid var(--line);border-radius:6px;background:var(--soft)}
+.dr .sel{position:absolute;top:9px;height:8px;background:var(--accent);border-radius:4px}
+.dr input{position:absolute;left:-2px;width:calc(100% + 4px);top:3px;height:20px;margin:0;-webkit-appearance:none;appearance:none;background:none;pointer-events:none}
+.dr input::-webkit-slider-thumb{-webkit-appearance:none;pointer-events:auto;width:20px;height:20px;border-radius:50%;background:var(--card);border:2.5px solid var(--line);box-shadow:var(--shadow-sm);cursor:grab}
+.dr input::-moz-range-thumb{pointer-events:auto;width:16px;height:16px;border-radius:50%;background:var(--card);border:2.5px solid var(--line);cursor:grab}
+.drl{display:flex;justify-content:space-between;align-items:center;font-family:"Space Mono",monospace;font-size:11px;color:var(--muted)}
+.drl button{font:inherit;font-weight:700;background:var(--card);color:var(--ink);border:2px solid var(--line);border-radius:8px;padding:0 6px;box-shadow:var(--shadow-sm)}
+.drl button:active{transform:translate(2px,2px);box-shadow:none}
+.gbar{margin:6px 0 0;background:var(--card);border:2px solid var(--line);border-radius:12px;padding:6px 10px 4px;box-shadow:var(--shadow-sm)}
 .readout{font-family:"Space Mono",monospace;font-size:11.5px;color:var(--muted);min-height:17px}
 .empty{color:var(--muted);font-size:13px;font-family:"Space Mono",monospace;padding:20px 4px;text-align:center;border:2px dashed var(--hair);border-radius:12px}
 .bars .r{display:grid;grid-template-columns:88px minmax(0,1fr) 62px;gap:8px;align-items:center;font-size:12.5px;margin:5px 0}
@@ -127,6 +137,7 @@ a{color:inherit}
     <span class="sp"></span>
     <button class="chip" id="logbtn">Log</button>
   </div>
+  <div class="gbar"><div class="drl"><span>All charts</span><b id="glab" style="color:var(--ink)"></b><span></span></div><div class="dr" id="gdr"></div></div>
 
   <div class="grid" id="main"></div>
   <div class="foot">Data: Coin Metrics Community · BGeometrics · mempool.space — refreshed twice daily by GitHub Actions. Not investment advice.</div>
@@ -199,12 +210,34 @@ const zone=(k,v)=>v==null?"":(([l,c])=>`<i class="z-${c}">${l}</i>`)(Z[k](v));
 /* ---------- chart ---------- */
 const DASH=["","6 4","2 3","10 4 2 4","1 4","8 3"];
 const charts=[];
-function chart(el,series,o={}){const c={el,series,o};charts.push(c);draw(c);new ResizeObserver(()=>draw(c)).observe(el.querySelector(".fig"));return c}
-function rangeCut(){if(RANGE==="ALL")return -Infinity;const n={"1Y":365,"2Y":730,"4Y":1461}[RANGE];return Math.floor(Date.now()/DAY)-n}
+function chart(el,series,o={}){const c={el,series,o};charts.push(c);
+  const all=series.filter(s=>s&&s.d&&s.d.t.length);
+  if(all.length){c.fx0=Math.min(...all.map(s=>s.d.t[0]));c.fx1=Math.max(...all.map(s=>s.d.t.at(-1)));
+    if(c.fx1-c.fx0>60){const w=document.createElement("div");w.innerHTML=`<div class="dr"></div><div class="drl"><span class="a"></span><button type="button">Reset</button><span class="b"></span></div>`;el.querySelector(".readout").before(w);
+      const lab=()=>{const[x,y]=c.win||curWin(c);w.querySelector(".a").textContent=ym(x);w.querySelector(".b").textContent=ym(y);w.querySelector("button").style.visibility=c.win?"visible":"hidden"};
+      c.dr=dualRange(w.querySelector(".dr"),c.fx0,c.fx1,...curWin(c),1,(x,y)=>{c.win=[x,y];lab();draw(c)});
+      c.sync=()=>{if(!c.win)c.dr.set(...curWin(c));lab()};
+      w.querySelector("button").onclick=()=>{c.win=null;c.sync();draw(c)};lab()}}
+  draw(c);new ResizeObserver(()=>draw(c)).observe(el.querySelector(".fig"));return c}
+const TODAY=()=>Math.floor(Date.now()/DAY),Y2D=y=>Date.UTC(y,0,1)/DAY,Y0=2010;
+function rangeWin(){if(RANGE==="CUSTOM")return[Y2D(store.gf||2014),store.gt>=new Date().getUTCFullYear()?Infinity:Y2D((store.gt||9999)+1)];if(RANGE==="ALL")return[-Infinity,Infinity];return[TODAY()-{"1Y":365,"2Y":730,"4Y":1461}[RANGE],Infinity]}
+function rangeCut(){return rangeWin()[0]}
+function curWin(c){const[a,b]=rangeWin();return[Math.max(a,c.fx0),Math.min(b,c.fx1)]}
+const ym=d=>new Date(d*DAY).toLocaleDateString("en-GB",{month:"short",year:"numeric",timeZone:"UTC"});
+function dualRange(el,min,max,a,b,step,on){
+  el.innerHTML=`<div class="tk"></div><div class="sel"></div><input type="range" aria-label="From"><input type="range" aria-label="To">`;
+  const [i1,i2]=el.querySelectorAll("input"),sel=el.querySelector(".sel");
+  for(const i of[i1,i2]){i.min=min;i.max=max;i.step=step}
+  i1.value=a;i2.value=b;
+  const paint=()=>{const w=max-min||1;sel.style.left=((+i1.value-min)/w*100)+"%";sel.style.width=((+i2.value-+i1.value)/w*100)+"%"};
+  const h=e=>{let x=+i1.value,y=+i2.value;if(x>y-step){if(e.target===i1)i1.value=x=y-step;else i2.value=y=x+step}paint();on(x,y)};
+  i1.addEventListener("input",h);i2.addEventListener("input",h);paint();
+  return{set(x,y){i1.value=x;i2.value=y;paint()}};
+}
 function draw(c){
   const fig=c.el.querySelector(".fig"),W=fig.clientWidth,H=fig.clientHeight;if(!W)return;
-  const cut=rangeCut(),log=c.o.log==="auto"?LOG:!!c.o.log;
-  const ser=c.series.filter(s=>s&&s.d).map((s,i)=>{const t=[],v=[];s.d.t.forEach((x,j)=>{const y=s.d.v[j];if(x>=cut&&(!log||y>0)){t.push(x);v.push(y)}});return {...s,t,v,k:i}}).filter(s=>s.t.length>1);
+  const [cut,cutB]=c.win||rangeWin(),log=c.o.log==="auto"?LOG:!!c.o.log;
+  const ser=c.series.filter(s=>s&&s.d).map((s,i)=>{const t=[],v=[];s.d.t.forEach((x,j)=>{const y=s.d.v[j];if(x>=cut&&x<=cutB&&(!log||y>0)){t.push(x);v.push(y)}});return {...s,t,v,k:i}}).filter(s=>s.t.length>1);
   const leg=c.el.querySelector(".legend");
   fig.classList.toggle("isempty",!ser.length);
   if(!ser.length){fig.innerHTML=`<div class="empty">${esc(c.o.empty||"No data yet — appears after the next data run.")}</div>`;leg.innerHTML="";return}
@@ -238,14 +271,18 @@ function draw(c){
   svg.addEventListener("pointerleave",()=>{hx.setAttribute("visibility","hidden");ro.textContent=""});
 }
 function niceStep(r){const p=10**Math.floor(Math.log10(r)),f=r/p;return (f<1.5?1:f<3?2:f<7?5:10)*p}
-function redrawAll(){charts.forEach(draw)}
+function redrawAll(){charts.forEach(c=>{c.win=null;c.sync&&c.sync();draw(c)})}
 const box=(title,lead,o={})=>`<div class="cbox" ${o.id?`id="${o.id}"`:""}><h3>${esc(title)}</h3>${lead?`<div class="lead">${lead}</div>`:""}<div class="fig" style="${o.h?`height:${o.h}px`:""}"></div><div class="legend"></div><div class="readout"></div></div>`;
 
 /* ---------- layout ---------- */
 const SECTIONS=[["snap","Snapshot"],["val","Valuation"],["pnl","Profit & loss"],["hold","Holders"],["utxo","UTXO (self-computed)"],["flow","Flows"],["mine","Miners"],["net","Network"],["deriv","Derivatives"],["live","Live mempool"],["data","Data status"]];
 $("nav").innerHTML=SECTIONS.map(([k,n])=>`<a class="chip" href="#${k}">${n}</a>`).join("");
 $("range").innerHTML=["1Y","2Y","4Y","ALL"].map(r=>`<button class="chip${r===RANGE?" on":""}" data-r="${r}">${r}</button>`).join("");
-$("range").addEventListener("click",e=>{const b=e.target.closest("[data-r]");if(!b)return;RANGE=b.dataset.r;store.range=RANGE;saveP();[...$("range").children].forEach(x=>x.classList.toggle("on",x===b));redrawAll()});
+const CY=new Date().getUTCFullYear();
+function gWin(){if(RANGE==="CUSTOM")return[store.gf||2014,store.gt||CY];const[a]=rangeWin();return[a===-Infinity?Y0:new Date(a*DAY).getUTCFullYear(),CY]}
+function gLab(){const[a,b]=gWin();$("glab").textContent=RANGE==="CUSTOM"?`${a} → ${b===CY?"now":b}`:`${RANGE} (${a} → now)`}
+const GD=dualRange($("gdr"),Y0,CY,...gWin(),1,(a,b)=>{RANGE="CUSTOM";store.range=RANGE;store.gf=a;store.gt=b;saveP();[...$("range").children].forEach(x=>x.classList.remove("on"));gLab();clearTimeout(GD.t);GD.t=setTimeout(redrawAll,120)});gLab();
+$("range").addEventListener("click",e=>{const b=e.target.closest("[data-r]");if(!b)return;RANGE=b.dataset.r;store.range=RANGE;saveP();[...$("range").children].forEach(x=>x.classList.toggle("on",x===b));GD.set(...gWin());gLab();redrawAll()});
 const lb=$("logbtn");lb.classList.toggle("on",LOG);lb.addEventListener("click",()=>{LOG=!LOG;store.log=LOG;saveP();lb.classList.toggle("on",LOG);redrawAll()});
 $("main").innerHTML=SECTIONS.map(([k,n])=>`<section class="section" id="${k}"><h2>${n}</h2><div class="body"><div class="empty">Loading…</div></div></section>`).join("");
 const body=k=>$(k).querySelector(".body");
