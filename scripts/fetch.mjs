@@ -81,9 +81,8 @@ export const BG = [
   "etf-btc-total", "etf-flow-btc", "funding-rate", "open-interest-futures", "btc-liquidations-1d",
   "coins-addr-1-BTC", "coins-addr-10-1-BTC", "coins-addr-100-10-BTC", "coins-addr-1K-100-BTC",
   "coins-addr-10K-1K-BTC", "coins-addr-10K-BTC",
-  "true-market-mean", "investor-price", "puell-multiple", "hashprice", "nvts",
-  "sth-mvrv", "sth-realized-price", "lth-realized-price", "sopr", "sth-sopr", "nupl",
-];
+  "true-market-mean", "investor-price", "hashprice", "nvts",
+];  // cohort metrics (STH/LTH, SOPR, NUPL, HODL, CDD) are self-computed from BigQuery now
 // Date key differs by endpoint (d, theDay, unixTs, ...): pick it by name or by value shape.
 const DATE_RE = /^\d{4}-\d{2}-\d{2}/;
 function dateKey(r) {
@@ -113,7 +112,7 @@ function normalizeBG(arr) {
 async function bgeometrics() {
   const n = Math.min(BG_PER_RUN, BG.length);
   // Repair first: series saved without usable dates, or never fetched successfully.
-  const repair = BG.filter((ep) => { const m = meta.metrics["bg-" + ep]; return m && (m.last == null); }).slice(0, n);
+  const repair = [...BG.filter((ep) => !meta.metrics["bg-" + ep]?.ok), ...BG.filter((ep) => { const m = meta.metrics["bg-" + ep]; return m?.ok && m.last == null; })].slice(0, n);
   const rot = [];
   for (let i = 0; rot.length < n - repair.length && i < BG.length; i++) {
     const ep = BG[(meta.bgCursor + i) % BG.length];
