@@ -1,0 +1,17 @@
+name: bq-dryrun
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  dry:
+    runs-on: ubuntu-latest
+    env:
+      GCP_PROJECT: gen-lang-client-0277591498
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - run: pip install google-cloud-bigquery
+      - run: python scripts/bq/dryrun.py
