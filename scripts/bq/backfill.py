@@ -16,23 +16,33 @@ G0 = dt.date(2009, 1, 3)
 GS = "DATE '2009-01-03'"
 P = "`bigquery-public-data.crypto_bitcoin"
 
-CUBE_SQL = f"""
+def cube_sql(cb=True, ty=True):
+    cb_col = "IF(t.hash IS NOT NULL, 1, 0)" if cb else "0"
+    ty_col = """CASE o.type WHEN 'pubkey' THEN 0 WHEN 'pubkeyhash' THEN 1 WHEN 'scripthash' THEN 2
+       WHEN 'witness_v0_keyhash' THEN 3 WHEN 'witness_v0_scripthash' THEN 3 WHEN 'witness_v1_taproot' THEN 4 ELSE 5 END""" if ty else "5"
+    cb_join = f"LEFT JOIN (SELECT hash FROM {P}.transactions` WHERE is_coinbase) t ON t.hash = o.transaction_hash" if cb else ""
+    return f"""
 SELECT
   DATE(o.block_timestamp) AS cd,
   DATE(i.block_timestamp) AS sd,
   CASE WHEN o.value < 10000000 THEN 0 WHEN o.value < 100000000 THEN 1 WHEN o.value < 1000000000 THEN 2
        WHEN o.value < 10000000000 THEN 3 WHEN o.value < 100000000000 THEN 4 ELSE 5 END AS band,
-  IF(o.transaction_index = 0, 1, 0) AS cb,
-  CASE o.type WHEN 'pubkey' THEN 0 WHEN 'pubkeyhash' THEN 1 WHEN 'scripthash' THEN 2
-       WHEN 'witness_v0_keyhash' THEN 3 WHEN 'witness_v0_scripthash' THEN 3 WHEN 'witness_v1_taproot' THEN 4 ELSE 5 END AS ty,
+  {cb_col} AS cb,
+  {ty_col} AS ty,
   SUM(CAST(o.value AS FLOAT64)) AS v,
   COUNT(*) AS n
 FROM {P}.outputs` o
 LEFT JOIN {P}.inputs` i
   ON i.spent_transaction_hash = o.transaction_hash AND i.spent_output_index = o.index
+{cb_join}
 WHERE o.type != 'nulldata'
 GROUP BY cd, sd, band, cb, ty
 """
+
+
+_v = os.environ.get("CUBE_VARIANT", "both")
+CUBE_SQL = cube_sql(cb=_v in ("both", "cb"), ty=_v in ("both", "ty"))
+
 
 
 def client():

@@ -2,14 +2,17 @@
 import json, os, sys
 sys.path.insert(0, os.path.dirname(__file__))
 from google.cloud import bigquery
-from backfill import CUBE_SQL
+from backfill import cube_sql
 
 PROJECT = os.environ["GCP_PROJECT"]
 D = "`bigquery-public-data.crypto_bitcoin"
 TIB = 1024 ** 4
 
 Q = {
- "CUBE (single labelled query: the real backfill)": CUBE_SQL,
+ "CUBE band only": cube_sql(False, False),
+ "CUBE band+type": cube_sql(False, True),
+ "CUBE band+coinbase": cube_sql(True, False),
+ "CUBE band+type+coinbase": cube_sql(True, True),
  "backfill_created (outputs: day, value)":
   f"SELECT DATE(block_timestamp) d, SUM(value) v, COUNT(*) n FROM {D}.outputs` GROUP BY d",
  "backfill_spent (inputs x outputs: spend day, created day, value)":
