@@ -77,16 +77,12 @@ async function coinMetrics() {
 
 // ---------- BGeometrics (rotating cursor) ----------
 export const BG = [
-  // valuation & cohorts
-  "sth-mvrv", "sth-realized-price", "lth-realized-price", "sopr", "sth-sopr", "nupl", "supply-profit", "supply-loss",
-  "mvrv-zscore", "lth-mvrv", "lth-sopr", "nupl-sth", "nupl-lth", "true-market-mean", "investor-price",
-  "realized-profit", "realized-loss", "hodl-waves-supply", "puell-multiple", "aviv",
-  // behaviour, miners, flows, derivatives
-  "nvts", "cdd", "vdd-multiple", "hashribbons", "hashprice", "etf-flow-btc", "etf-btc-total", "stablecoin-supply",
-  "funding-rate", "open-interest-futures", "btc-liquidations-1d", "fear-greed",
-  // supply distribution
+  // ETF + derivatives first (no other free source), then wallet bands, then extras
+  "etf-btc-total", "etf-flow-btc", "funding-rate", "open-interest-futures", "btc-liquidations-1d",
   "coins-addr-1-BTC", "coins-addr-10-1-BTC", "coins-addr-100-10-BTC", "coins-addr-1K-100-BTC",
   "coins-addr-10K-1K-BTC", "coins-addr-10K-BTC",
+  "true-market-mean", "investor-price", "puell-multiple", "hashprice", "nvts",
+  "sth-mvrv", "sth-realized-price", "lth-realized-price", "sopr", "sth-sopr", "nupl",
 ];
 // Date key differs by endpoint (d, theDay, unixTs, ...): pick it by name or by value shape.
 const DATE_RE = /^\d{4}-\d{2}-\d{2}/;
@@ -142,6 +138,74 @@ async function bgeometrics() {
   meta.bgCursor = (meta.bgCursor + rot.length) % BG.length;
 }
 
+
+async function getText(url) {
+  const r = await fetch(url, { headers: { "user-agent": "Mozilla/5.0 (btc-onchain dashboard; github actions)", accept: "text/html" } });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.text();
+}
+
+// ---------- Fear & Greed (alternative.me, full history) ----------
+async function fearGreed() {
+  try {
+    const j = await getJSON("https://api.alternative.me/fng/?limit=0&format=json");
+    save("fng", ["value"], (j.data || []).map((d) => [day(Number(d.timestamp)), Number(d.value)]), "alternative.me");
+    console.log("  ✓ fng");
+  } catch (e) { fail("fng", "alternative.me", e); }
+}
+
+// ---------- Stablecoin supply (DefiLlama) ----------
+async function stablecoins() {
+  try {
+    const j = await getJSON("https://stablecoins.llama.fi/stablecoincharts/all");
+    save("llama-stables", ["usd"], j.map((d) => [day(Number(d.date)), round(d.totalCirculatingUSD?.peggedUSD ?? d.totalCirculating?.peggedUSD)]), "defillama");
+    console.log("  ✓ llama-stables");
+  } catch (e) { fail("llama-stables", "defillama", e); }
+}
+
+// ---------- Spot ETF daily flows (Farside, US$m) ----------
+const MON = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11 };
+async function farside() {
+  try {
+    const html = await getText("https://farside.co.uk/bitcoin-etf-flow-all-data/");
+    const rows = [];
+    for (const tr of html.split(/<tr[\s>]/i).slice(1)) {
+      const cells = [...tr.split(/<\/tr>/i)[0].matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi)].map((m) => m[1].replace(/<[^>]+>/g, "").replace(/&nbsp;|,/g, "").trim());
+      const m = cells[0]?.match(/^(\d{1,2}) (\w{3}) (\d{4})$/);
+      if (!m || MON[m[2]] == null) continue;
+      const tot = cells.at(-1);
+      if (!tot || tot === "-") continue;
+      const v = /^\(.*\)$/.test(tot) ? -parseFloat(tot.slice(1, -1)) : parseFloat(tot);
+      if (!isFinite(v)) continue;
+      rows.push([Math.floor(Date.UTC(+m[3], MON[m[2]], +m[1]) / 864e5), v]);
+    }
+    if (rows.length < 50) throw new Error(`parsed only ${rows.length} rows`);
+    save("farside-etf", ["flow_usd_m"], rows, "farside");
+    console.log(`  ✓ farside-etf (${rows.length})`);
+  } catch (e) { fail("farside-etf", "farside", e); }
+}
+
+// ---------- Coinbase premium (Coinbase BTC-USD vs Binance BTC-USDT daily close) ----------
+async function coinbasePremium() {
+  try {
+    const cb = new Map(), bn = new Map(), end = Date.now(), start = end - 1500 * 864e5;
+    for (let t = start; t < end; t += 299 * 864e5) {
+      const a = new Date(t).toISOString(), b = new Date(Math.min(t + 299 * 864e5, end)).toISOString();
+      const j = await getJSON(`https://api.exchange.coinbase.com/products/BTC-USD/candles?granularity=86400&start=${a}&end=${b}`);
+      for (const c of j) cb.set(Math.floor(c[0] / 86400), c[4]);
+      await sleep(400);
+    }
+    for (let t = start; t < end; t += 1000 * 864e5) {
+      const j = await getJSON(`https://data-api.binance.vision/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=1000&startTime=${t}`);
+      for (const k of j) bn.set(Math.floor(k[0] / 864e5), +k[4]);
+      await sleep(400);
+    }
+    const rows = [...cb].filter(([d]) => bn.has(d)).map(([d, c]) => [d, round((c / bn.get(d) - 1) * 100)]);
+    save("cb-premium", ["pct"], rows, "coinbase/binance");
+    console.log(`  ✓ cb-premium (${rows.length})`);
+  } catch (e) { fail("cb-premium", "coinbase/binance", e); }
+}
+
 // ---------- mempool.space snapshot ----------
 async function mempool() {
   console.log("mempool.space");
@@ -166,6 +230,11 @@ async function mempool() {
 }
 
 await coinMetrics();
+console.log("extra sources");
+await fearGreed();
+await stablecoins();
+await farside();
+await coinbasePremium();
 await bgeometrics();
 await mempool();
 meta.updated = now;

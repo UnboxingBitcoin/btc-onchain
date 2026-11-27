@@ -211,8 +211,9 @@ function draw(c){
   let x0=Infinity,x1=-Infinity,y0=Infinity,y1=-Infinity;
   for(const s of ser){x0=Math.min(x0,s.t[0]);x1=Math.max(x1,s.t.at(-1));for(const y of s.v){if(y<y0)y0=y;if(y>y1)y1=y}}
   for(const r of c.o.refs||[])if(!log||r.y>0){y0=Math.min(y0,r.y);y1=Math.max(y1,r.y)}
+  if(c.o.zfit){y0=Math.min(y0,c.o.zfit[0]);y1=Math.max(y1,c.o.zfit[1])}
   if(c.o.zero){y0=Math.min(y0,0);y1=Math.max(y1,0)}
-  const ty=log?(v=>Math.log10(v)):(v=>v);let a=ty(y0),b=ty(y1);if(a===b){a-=1;b+=1}const pad=(b-a)*.06;a-=pad;b+=pad;
+  const ty=log?(v=>Math.log10(Math.max(v,1e-12))):(v=>v);let a=ty(y0),b=ty(y1);if(a===b){a-=1;b+=1}const pad=(b-a)*.06;a-=pad;b+=pad;
   const L=6,R=W<520?44:56,T=8,B=20,iw=W-L-R,ih=H-T-B;
   const X=t=>L+(t-x0)/(x1-x0||1)*iw,Y=v=>T+(1-(ty(v)-a)/(b-a))*ih;
   const fmt=c.o.fmt||(v=>num(v));
@@ -220,7 +221,8 @@ function draw(c){
   const xt=[];const yrs=(x1-x0)/365;const d0=new Date(x0*DAY),d1=new Date(x1*DAY);
   if(yrs>2.5){for(let y=d0.getUTCFullYear()+1;y<=d1.getUTCFullYear();y+=Math.ceil(yrs/6))xt.push([Date.UTC(y,0,1)/DAY,String(y)])}
   else{const step=yrs>1.2?3:yrs>.5?2:1;for(let d=new Date(Date.UTC(d0.getUTCFullYear(),d0.getUTCMonth()+1,1));d<=d1;d.setUTCMonth(d.getUTCMonth()+step))xt.push([d/DAY,d.toLocaleDateString("en-GB",{month:"short",year:"2-digit",timeZone:"UTC"})])}
-  let h=`<g class="grid">${ticks.map(v=>`<line x1="${L}" x2="${L+iw}" y1="${Y(v)}" y2="${Y(v)}"/>`).join("")}</g>`;
+  let h=(c.o.zones||[]).map(z=>{const lo=Math.max(z.lo??-1e18,log?1e-12:-1e18),yA=Math.min(Math.max(Y(z.hi??1e18),T),T+ih),yB=Math.min(Math.max(Y(lo),T),T+ih);return yB-yA>0.5?`<rect x="${L}" y="${yA}" width="${iw}" height="${yB-yA}" fill="var(--${z.c})" opacity=".14"/>`+(z.label&&yB-yA>14?`<text x="${L+4}" y="${yA+11}" fill="var(--${z.c})" style="font-weight:700">${esc(z.label)}</text>`:""):""}).join("");
+  h+=`<g class="grid">${ticks.map(v=>`<line x1="${L}" x2="${L+iw}" y1="${Y(v)}" y2="${Y(v)}"/>`).join("")}</g>`;
   h+=ticks.map(v=>`<text x="${L+iw+5}" y="${Y(v)+3.5}">${esc(fmt(v))}</text>`).join("");
   h+=xt.filter(([t])=>t>=x0&&t<=x1).map(([t,l])=>`<text x="${X(t)}" y="${H-5}" text-anchor="middle">${esc(l)}</text>`).join("");
   for(const r of c.o.refs||[])if(!log||r.y>0){const y=Y(r.y);if(y>=T&&y<=T+ih)h+=`<line x1="${L}" x2="${L+iw}" y1="${y}" y2="${y}" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="5 4"/><text x="${L+iw-4}" y="${y-4}" text-anchor="end">${esc(r.label||fmt(r.y))}</text>`}
@@ -255,6 +257,24 @@ async function base(){
   return {price,mc,rc,sply,rp,mvrv,z:stdz(mc,rc)};
 }
 let B;
+async function X(g,c,bg){const u=UMETA?await U(g,c):null;return u||(bg?await S(bg):null)}
+const ZN={
+  mvrv:[{hi:1,c:"good",label:"Undervalued"},{lo:3.5,c:"bad",label:"Overheated"}],
+  z:[{hi:0,c:"good",label:"Deep value"},{lo:7,c:"bad",label:"Top zone"}],
+  nupl:[{hi:0,c:"good",label:"Capitulation"},{lo:.75,c:"bad",label:"Euphoria"}],
+  mayer:[{hi:.8,c:"good",label:"Cheap"},{lo:2.4,c:"bad",label:"Overextended"}],
+  puell:[{hi:.5,c:"good",label:"Miner capitulation"},{lo:4,c:"bad",label:"Top zone"}],
+  fg:[{hi:25,c:"good",label:"Extreme fear"},{lo:75,c:"bad",label:"Extreme greed"}],
+  sth:[{hi:1,c:"good",label:"Recent buyers in loss"},{lo:1.3,c:"bad",label:"Recent buyers hot"}],
+};
+function zsd(mc){if(!mc)return null;let n=0,mean=0,m2=0;const t=[],v=[];mc.t.forEach((x,i)=>{const a=mc.v[i];n++;const d=a-mean;mean+=d/n;m2+=d*(a-mean);if(n>30){t.push(x);v.push(Math.sqrt(m2/(n-1)))}});return{t,v}}
+let LIVE=null;
+async function livePrice(){
+  try{const j=await fetch("https://mempool.space/api/v1/prices").then(r=>r.json());if(j.USD)return LIVE=j.USD}catch(e){}
+  try{const j=await fetch("https://api.coinbase.com/v2/prices/BTC-USD/spot").then(r=>r.json());const v=+j.data.amount;if(v)return LIVE=v}catch(e){}
+  return LIVE;
+}
+async function liveFng(){try{const j=await fetch("https://api.alternative.me/fng/?limit=1").then(r=>r.json());const d=j.data[0];return{v:+d.value,t:Math.floor(+d.timestamp/86400),cls:d.value_classification}}catch(e){return null}}
 let UMETA=null;const ucache={};
 function ug(g){return ucache[g]||(ucache[g]=fetch(DATA+"u/"+g+".json?v="+(UMETA?.updated||"")).then(r=>r.ok?r.json():null).catch(()=>null))}
 async function U(g,c){return col(await ug(g),c)}
@@ -262,8 +282,8 @@ const addS=(...a)=>{a=a.filter(Boolean);return a.length?a.reduce((x,y)=>combine(
 async function profitPct(){const [a,b]=await Promise.all([S("bg-supply-profit"),S("bg-supply-loss")]);return combine(a,b,(x,y)=>x/(x+y)*100)}
 const R={
 async snap(el){
-  const [sthRP,lthRP,sthMV,prof,nupl,sopr,sthSopr,fg,iss,hr]=await Promise.all([S("bg-sth-realized-price"),S("bg-lth-realized-price"),S("bg-sth-mvrv"),profitPct(),S("bg-nupl"),S("bg-sopr"),S("bg-sth-sopr"),S("bg-fear-greed"),S("cm-IssTotUSD"),S("cm-HashRate")]);
-  const p=last(B.price),may=p&&sma(B.price,200)?p/last(sma(B.price,200)):null,pu=iss&&sma(iss,365)?last(iss)/last(sma(iss,365)):null;
+  const [sthRP,lthRP,sthMV,prof,nupl,sopr,sthSopr,fg,iss,hr,lp,lf]=await Promise.all([X("holders","sth_rp","bg-sth-realized-price"),X("holders","lth_rp","bg-lth-realized-price"),X("holders","sth_mvrv","bg-sth-mvrv"),UMETA?U("holders","pct_in_profit"):profitPct(),X("val","nupl","bg-nupl"),X("spent","sopr","bg-sopr"),X("spent","sth_sopr","bg-sth-sopr"),S("fng"),S("cm-IssTotUSD"),S("cm-HashRate"),livePrice(),liveFng()]);
+  const p=lp||last(B.price),may=p&&sma(B.price,200)?p/last(sma(B.price,200)):null,pu=iss&&sma(iss,365)?last(iss)/last(sma(iss,365)):null;
   const ch=v=>v==null?"":`<i class="${v>=0?"z-good":"z-bad"}">${v>=0?"▲":"▼"} ${pct(Math.abs(v))}</i>`;
   const vs=(a,b)=>a&&b?"Spot "+(a>=b?"+":"−")+pct(Math.abs(a/b-1)*100)+(a>=b?" above":" below"):"";
   const p7=ago(B.price,7),p30=ago(B.price,30);
@@ -276,12 +296,12 @@ async snap(el){
     ["% supply in profit",pct(pr),"profit",pr,lastT(prof)],
     ["SOPR",num(last(sopr),3),"sopr",last(sopr),lastT(sopr)],
     ["STH SOPR",num(last(sthSopr),3),"sopr",last(sthSopr),lastT(sthSopr)],
-    ["Mayer multiple",num(may),"mayer",may,lastT(B.price)],
+    ["Mayer multiple",num(may),"mayer",may,lp?Math.floor(Date.now()/DAY):lastT(B.price)],
     ["Puell multiple",num(pu),"puell",pu,lastT(iss)],
-    ["Fear & Greed",num(last(fg),0),"fg",last(fg),lastT(fg)],
+    ["Fear & Greed",lf?lf.v+" "+lf.cls:num(last(fg),0),"fg",lf?lf.v:last(fg),lf?lf.t:lastT(fg)],
   ];
   const vote=rows.map(r=>r[3]==null?0:(Z[r[2]](r[3])[1]==="good"?1:Z[r[2]](r[3])[1]==="bad"?-1:0)),sc=vote.reduce((a,b)=>a+b,0),cnt=rows.filter(r=>r[3]!=null).length;
-  el.innerHTML=`<div class="big"><b>${usd(p)}</b><div class="sub">7d ${ch(p7?(p/p7-1)*100:null)}<br>30d ${ch(p30?(p/p30-1)*100:null)}</div></div>
+  el.innerHTML=`<div class="big"><b id="lp">${usd(p)}</b><span class="mono sub" id="lpt">${lp?"● LIVE":"Daily close"}</span><div class="sub">7d ${ch(p7?(p/p7-1)*100:null)}<br>30d ${ch(p30?(p/p30-1)*100:null)}</div></div>
   <div class="kpis">
     <div class="kpi"><span>Realized price</span><b>${usd(last(B.rp))}</b><i class="z-n">${vs(p,last(B.rp))}</i></div>
     <div class="kpi"><span>STH cost basis</span><b>${usd(last(sthRP))}</b><i class="z-n">${vs(p,last(sthRP))}</i></div>
@@ -294,37 +314,42 @@ async snap(el){
   <div class="lead">${cnt?`<b>${sc>0?"▲ Leaning value":sc<0?"▼ Leaning heated":"● Mixed"}</b> — ${vote.filter(x=>x>0).length} value, ${vote.filter(x=>x<0).length} heated, ${cnt-vote.filter(x=>x).length} neutral of ${cnt} signals.`:""} Zones use conventional cycle thresholds.</div>
   <table><thead><tr><th>Metric</th><th class="n">Value</th><th>Zone</th><th class="n">As of</th></tr></thead><tbody>
   ${rows.map(r=>`<tr><td>${r[0]}</td><td class="n">${esc(r[1])}</td><td>${zone(r[2],r[3])||'<i class="z-n">no data</i>'}</td><td class="n sub">${fdate(r[4])}</td></tr>`).join("")}</tbody></table>`;
+  if(lp)setInterval(async()=>{const v=await livePrice();if(v){$("lp").textContent=usd(v);$("lpt").textContent="● LIVE "+new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})}},30000);
 },
 async val(el){
-  el.innerHTML=box("Price vs cost bases","Price against the average cost of all coins (realized), recent buyers (STH, under 155 days) and long-term holders, plus the 200-week average.",{id:"c-cb",h:280})+box("MVRV","Market cap ÷ realized cap. Below 1 means the average coin is under water.",{id:"c-mvrv"})+box("MVRV Z-score","How many standard deviations market cap sits above realized cap.",{id:"c-z"})+box("Mayer multiple","Price ÷ 200-day average.",{id:"c-may"})+box("Investor price & true market mean","BGeometrics cost-basis models that exclude miner and lost coins.",{id:"c-tmm"});
-  const [sth,lth,tmm,inv]=await Promise.all([S("bg-sth-realized-price"),S("bg-lth-realized-price"),S("bg-true-market-mean"),S("bg-investor-price")]);
+  el.innerHTML=box("Price vs cost bases","Price against the average cost of all coins (realized), recent buyers (STH, under 155 days) and long-term holders, plus the 200-week average.",{id:"c-cb",h:280})+box("Mayer bands","Price against its 200-day average. Below the 0.8× line has been a cheap zone; above 2.4× has marked overextended tops.",{id:"c-mb",h:260})+box("MVRV","Market cap ÷ realized cap. Below 1 means the average coin is under water.",{id:"c-mvrv"})+box("MVRV Z-score","How many standard deviations market cap sits above realized cap. Green under 0 has marked cycle lows; red above 7 has marked cycle tops.",{id:"c-z"})+box("MVRV Z-score as price levels","The same Z-score turned into prices: where BTC would be at Z = 0 (realized price), Z = 3 and Z = 7 today.",{id:"c-zb",h:260})+box("Mayer multiple","Price ÷ 200-day average.",{id:"c-may"})+box("Investor price & true market mean","BGeometrics cost-basis models that exclude miner and lost coins.",{id:"c-tmm"});
+  const [sth,lth,tmm,inv,smv,lmv]=await Promise.all([X("holders","sth_rp","bg-sth-realized-price"),X("holders","lth_rp","bg-lth-realized-price"),S("bg-true-market-mean"),S("bg-investor-price"),X("holders","sth_mvrv","bg-sth-mvrv"),X("holders","lth_mvrv","bg-lth-mvrv")]);
+  const ma200=sma(B.price,200);
   chart($("c-cb"),[{name:"Price",d:B.price},{name:"Realized",d:B.rp},{name:"STH",d:sth},{name:"LTH",d:lth},{name:"200W MA",d:sma(B.price,1400)}],{log:"auto",fmt:v=>usd(v,0)});
-  chart($("c-mvrv"),[{name:"MVRV",d:B.mvrv},{name:"STH MVRV",d:await S("bg-sth-mvrv")},{name:"LTH MVRV",d:await S("bg-lth-mvrv")}],{refs:[{y:1,label:"1.0 cost basis"},{y:3.5,label:"3.5 heated"}],fmt:v=>v.toFixed(2)});
-  chart($("c-z"),[{name:"Z-score",d:B.z}],{refs:[{y:0,label:"0"},{y:7,label:"7 top zone"}],fmt:v=>v.toFixed(1)});
-  chart($("c-may"),[{name:"Mayer",d:combine(B.price,sma(B.price,200),(a,b)=>a/b)}],{refs:[{y:.8,label:"0.8"},{y:2.4,label:"2.4"}],fmt:v=>v.toFixed(2)});
+  chart($("c-mb"),[{name:"Price",d:B.price},{name:"200D MA",d:ma200},{name:"0.8×",d:ma200&&{t:ma200.t,v:ma200.v.map(x=>x*.8)},c:3},{name:"2.4×",d:ma200&&{t:ma200.t,v:ma200.v.map(x=>x*2.4)},c:2}],{log:"auto",fmt:v=>usd(v,0)});
+  chart($("c-mvrv"),[{name:"MVRV",d:B.mvrv},{name:"STH MVRV",d:smv},{name:"LTH MVRV",d:lmv}],{zones:ZN.mvrv,refs:[{y:1,label:"1.0 cost basis"}],fmt:v=>v.toFixed(2)});
+  chart($("c-z"),[{name:"Z-score",d:B.z}],{zones:ZN.z,zfit:[-1,8],fmt:v=>v.toFixed(1)});
+  {const sd=zsd(B.mc),lvl=k=>combine(combine(B.rc,sd,(r,d)=>r+k*d),B.sply,(a,b)=>a/b);chart($("c-zb"),[{name:"Price",d:B.price},{name:"Z = 0",d:B.rp,c:3},{name:"Z = 3",d:lvl(3),c:4},{name:"Z = 7",d:lvl(7),c:2}],{log:"auto",fmt:v=>usd(v,0)})}
+  chart($("c-may"),[{name:"Mayer",d:combine(B.price,ma200,(a,b)=>a/b)}],{zones:ZN.mayer,refs:[{y:1,label:"1.0"}],zfit:[.6,2.6],fmt:v=>v.toFixed(2)});
   chart($("c-tmm"),[{name:"Price",d:B.price},{name:"True market mean",d:tmm},{name:"Investor price",d:inv}],{log:"auto",fmt:v=>usd(v,0)});
 },
 async pnl(el){
   el.innerHTML=box("NUPL","Unrealized profit as a share of market cap, for all holders and each cohort.",{id:"c-nupl"})+box("Supply in profit","Share of circulating BTC whose last move was below today's price.",{id:"c-prof"})+box("SOPR (7-day average)","Above 1 = coins moved at a profit; below 1 = at a loss.",{id:"c-sopr"})+box("Net realized profit / loss (USD)","Realized profit minus realized loss, 7-day average.",{id:"c-nrpl"});
-  const [n,ns,nl,so,ss,ls,rp,rl]=await Promise.all(["bg-nupl","bg-nupl-sth","bg-nupl-lth","bg-sopr","bg-sth-sopr","bg-lth-sopr","bg-realized-profit","bg-realized-loss"].map(id=>S(id)));
-  const pf=await profitPct();
-  chart($("c-nupl"),[{name:"NUPL",d:n},{name:"STH",d:ns},{name:"LTH",d:nl}],{refs:[{y:0,label:"0"},{y:.75,label:"0.75 euphoria"}],fmt:v=>v.toFixed(2)});
+  const [n,ns,nl,so,ss,ls,nrp,pf]=await Promise.all([X("val","nupl","bg-nupl"),X("holders","sth_nupl","bg-nupl-sth"),X("holders","lth_nupl","bg-nupl-lth"),X("spent","sopr","bg-sopr"),X("spent","sth_sopr","bg-sth-sopr"),X("spent","lth_sopr","bg-lth-sopr"),X("spent","net_realized_pl"),UMETA?U("holders","pct_in_profit"):profitPct()]);
+  chart($("c-nupl"),[{name:"NUPL",d:n},{name:"STH",d:ns},{name:"LTH",d:nl}],{zones:ZN.nupl,refs:[{y:0,label:"0"}],fmt:v=>v.toFixed(2)});
   chart($("c-prof"),[{name:"In profit",d:pf}],{refs:[{y:50,label:"50%"}],fmt:v=>v.toFixed(0)+"%"});
-  chart($("c-sopr"),[{name:"SOPR",d:sma(so,7)},{name:"STH",d:sma(ss,7)},{name:"LTH",d:sma(ls,7)}],{refs:[{y:1,label:"1.0"}],fmt:v=>v.toFixed(3)});
-  chart($("c-nrpl"),[{name:"Net realized P/L",d:sma(combine(rp,rl,(a,b)=>a-Math.abs(b)),7)}],{bars:true,zero:true,fmt:v=>usd(v)});
+  chart($("c-sopr"),[{name:"SOPR",d:sma(so,7)},{name:"STH",d:sma(ss,7)}],{zones:[{hi:1,c:"bad",label:"Selling at a loss"}],refs:[{y:1,label:"1.0"}],fmt:v=>v.toFixed(3)});
+  chart($("c-nrpl"),[{name:"Net realized P/L",d:sma(nrp,7)}],{bars:true,zero:true,fmt:v=>usd(v)});
 },
 async hold(el){
   el.innerHTML=`<div id="hw"></div><div id="coh"></div>`+box("Coin days destroyed (30-day average)","Spikes mean old coins are moving.",{id:"c-cdd"})+box("VDD multiple","Value days destroyed vs its 1-year average. High = old coins selling into strength.",{id:"c-vdd"});
-  const [cdd,vdd,hw]=await Promise.all([S("bg-cdd"),S("bg-vdd-multiple"),get("bg-hodl-waves-supply")]);
+  const [cdd,vddR,hw]=await Promise.all([X("spent","cdd","bg-cdd"),X("spent","vdd"),UMETA?ug("waves"):get("bg-hodl-waves-supply")]);
+  const vdd=vddR?combine(sma(vddR,30),sma(vddR,365),(a,b)=>a/b):await S("bg-vdd-multiple");
   chart($("c-cdd"),[{name:"CDD 30d",d:sma(cdd,30)}],{fmt:v=>num(v,0)});
-  chart($("c-vdd"),[{name:"VDD multiple",d:vdd}],{refs:[{y:1,label:"1.0"},{y:2.9,label:"2.9 hot"}],fmt:v=>v.toFixed(2)});
-  if(hw&&hw.rows.length){const r=hw.rows.at(-1),o=hw.rows.find(x=>x[0]>=r[0]-90)||hw.rows[0];const vals=hw.cols.map((c,i)=>[c,pctish(r[i+1]),pctish(o[i+1])]).filter(x=>x[1]!=null);const mx=Math.max(...vals.map(x=>x[1]));
+  chart($("c-vdd"),[{name:"VDD multiple",d:vdd}],{zones:[{lo:2.9,c:"bad",label:"Old coins selling hot"}],refs:[{y:1,label:"1.0"}],fmt:v=>v.toFixed(2)});
+  if(hw&&hw.rows.length){const r=hw.rows.at(-1),o=hw.rows.find(x=>x[0]>=r[0]-90)||hw.rows[0];const WL={w_lt1d:"< 1 day",w_1d_1w:"1d – 1w",w_1w_1m:"1w – 1m",w_1m_3m:"1 – 3 mo",w_3m_6m:"3 – 6 mo",w_6m_1y:"6 mo – 1 yr",w_1y_2y:"1 – 2 yr",w_2y_3y:"2 – 3 yr",w_3y_5y:"3 – 5 yr",w_5y_7y:"5 – 7 yr",w_7y_10y:"7 – 10 yr",w_gt10y:"10 yr +"};const vals=hw.cols.map((c,i)=>[WL[c]||c,pctish(r[i+1]),pctish(o[i+1])]).filter(x=>x[1]!=null);const mx=Math.max(...vals.map(x=>x[1]));
     $("hw").innerHTML=`<h3>HODL waves</h3><div class="lead">Share of supply by age since last move, ${fdate(r[0])}. Change vs 90 days earlier.</div><div class="bars">${vals.map(([c,v,ov])=>`<div class="r"><span>${esc(c.replace(/^hodl_?|_?supply$/gi,"").replace(/_/g," "))}</span><div class="bar"><i style="width:${(v/mx*100).toFixed(1)}%"></i></div><b>${pct(v)}<br><i class="${v-ov>=0?"z-good":"z-bad"}" style="font-style:normal">${v-ov>=0?"+":"−"}${Math.abs(v-ov).toFixed(1)}</i></b></div>`).join("")}</div>`}
   else $("hw").innerHTML=`<h3>HODL waves</h3><div class="empty">No data yet — appears after the next data run.</div>`;
   const CO=[["coins-addr-10K-BTC","10K+ ₿"],["coins-addr-10K-1K-BTC","1K–10K ₿"],["coins-addr-1K-100-BTC","100–1K ₿"],["coins-addr-100-10-BTC","10–100 ₿"],["coins-addr-10-1-BTC","1–10 ₿"],["coins-addr-1-BTC","< 1 ₿"]];
-  const cs=await Promise.all(CO.map(([id])=>S("bg-"+id)));
+  let cs=await Promise.all(CO.map(([id])=>S("bg-"+id)));let byUtxo=false;
+  if(!cs.some(Boolean)&&UMETA){byUtxo=true;const K=["sup_gt1k","sup_100_1k","sup_10_100","sup_1_10","sup_0.1_1","sup_lt0.1"];CO.splice(0,6,["","1K+ ₿"],["","100 – 1K ₿"],["","10 – 100 ₿"],["","1 – 10 ₿"],["","0.1 – 1 ₿"],["","< 0.1 ₿"]);cs=await Promise.all(K.map(k=>U("bands",k)))}
   const rows=CO.map(([,n],i)=>{const s=cs[i];if(!s)return"";const l=last(s),a30=ago(s,30),a90=ago(s,90);const d=(x)=>x==null?"—":`<span class="${l-x>=0?"z-good":"z-bad"}">${l-x>=0?"+":"−"}${num(Math.abs(l-x),0)}</span>`;return`<tr><td>${n}</td><td class="n">${btc(l)}</td><td class="n">${d(a30)}</td><td class="n">${d(a90)}</td></tr>`}).join("");
-  $("coh").innerHTML=`<h3>Supply by wallet size</h3><div class="lead">BTC held by address balance band. Exchanges and ETFs sit in the large bands.</div>`+(rows?`<table><thead><tr><th>Band</th><th class="n">Holds</th><th class="n">30d</th><th class="n">90d</th></tr></thead><tbody>${rows}</tbody></table>`:`<div class="empty">No data yet — appears after the next data run.</div>`);
+  $("coh").innerHTML=(byUtxo?`<h3>Supply by UTXO size</h3><div class="lead">BTC by the size of each coin (UTXO), from our own chain scan. True wallet-balance bands arrive with the December address backfill.</div>`:`<h3>Supply by wallet size</h3><div class="lead">BTC held by address balance band. Exchanges and ETFs sit in the large bands.</div>`)+(rows?`<table><thead><tr><th>Band</th><th class="n">Holds</th><th class="n">30d</th><th class="n">90d</th></tr></thead><tbody>${rows}</tbody></table>`:`<div class="empty">No data yet — appears after the next data run.</div>`);
 },
 async utxo(el){
   if(!UMETA){el.innerHTML=`<div class="empty">UTXO data is not published yet.</div>`;return}
@@ -354,9 +379,9 @@ async utxo(el){
   const p=last(pr),kp=(l,val,sub)=>`<div class="kpi"><span>${l}</span><b>${val}</b>${sub||""}</div>`,vs=(a,b)=>a&&b?`<i class="z-n">${a>=b?"+":"−"}${Math.abs((a/b-1)*100).toFixed(0)}% vs price</i>`:"";
   $("uk").innerHTML=`<div class="kpis">${kp("Realized price",usd(last(rp)),vs(last(rp),p))}${kp("STH cost basis",usd(last(sr)),vs(last(sr),p))}${kp("LTH cost basis",usd(last(lr)),vs(last(lr),p))}${kp("MVRV",last(mv)==null?"—":last(mv).toFixed(2),zone("mvrv",last(mv)))}${kp("MVRV Z-score",last(zz)==null?"—":last(zz).toFixed(2),zone("z",last(zz)))}${kp("NUPL",last(nu)==null?"—":last(nu).toFixed(2),zone("nupl",last(nu)))}${kp("STH MVRV",last(smv)==null?"—":last(smv).toFixed(2),zone("sthmvrv",last(smv)))}${kp("Supply in profit",pct(last(pip)),zone("profit",last(pip)))}${kp("Average coin age",last(ag)==null?"—":(last(ag)/365).toFixed(1)+" yr")}</div>`;
   chart($("u-cb"),[{name:"Price",d:pr},{name:"Realized",d:rp},{name:"STH",d:sr},{name:"LTH",d:lr}],{log:"auto",fmt:x=>usd(x,0)});
-  chart($("u-mvrv"),[{name:"MVRV",d:mv},{name:"STH",d:smv},{name:"LTH",d:lmv}],{refs:[{y:1,label:"1.0 cost basis"},{y:3.5,label:"3.5 heated"}],fmt:x=>x.toFixed(2)});
-  chart($("u-z"),[{name:"Z-score",d:zz}],{refs:[{y:0,label:"0"},{y:7,label:"7 top zone"}],fmt:x=>x.toFixed(1)});
-  chart($("u-nupl"),[{name:"NUPL",d:nu}],{refs:[{y:0,label:"0"},{y:.75,label:"0.75 euphoria"}],fmt:x=>x.toFixed(2)});
+  chart($("u-mvrv"),[{name:"MVRV",d:mv},{name:"STH",d:smv},{name:"LTH",d:lmv}],{zones:ZN.mvrv,refs:[{y:1,label:"1.0 cost basis"}],fmt:x=>x.toFixed(2)});
+  chart($("u-z"),[{name:"Z-score",d:zz}],{zones:ZN.z,zfit:[-1,8],fmt:x=>x.toFixed(1)});
+  chart($("u-nupl"),[{name:"NUPL",d:nu}],{zones:ZN.nupl,refs:[{y:0,label:"0"}],fmt:x=>x.toFixed(2)});
   chart($("u-sopr"),[{name:"SOPR",d:sma(so,7)},{name:"Adjusted",d:sma(aso,7)},{name:"STH",d:sma(sso,7)}],{refs:[{y:1,label:"1.0"}],fmt:x=>x.toFixed(3)});
   chart($("u-lso"),[{name:"LTH SOPR",d:sma(lso,7)}],{log:"auto",refs:[{y:1,label:"1.0"}],fmt:x=>x.toFixed(2)});
   chart($("u-pl"),[{name:"Net realized P/L",d:sma(np,30)}],{bars:true,zero:true,fmt:x=>usd(x,0)});
@@ -400,13 +425,18 @@ async utxo(el){
   }catch(e){$("ur").innerHTML=""}
 },
 async flow(el){
-  el.innerHTML=box("Exchange net flow (7-day avg, USD)","Outflows minus inflows across tracked exchanges. Green bars = net withdrawals (coins leaving), red = net deposits.",{id:"c-xf"})+box("BTC on exchanges","Coin Metrics exchange supply.",{id:"c-xs"})+box("Spot ETF daily flow (BTC)","",{id:"c-etf"})+box("BTC held by ETFs","",{id:"c-etfh"})+box("Stablecoin supply","Dry powder that can rotate into BTC.",{id:"c-stb"});
-  const [fi,fo,xs,ef,eh,st]=await Promise.all([S("cm-FlowInExUSD"),S("cm-FlowOutExUSD"),S("cm-SplyExNtv"),S("bg-etf-flow-btc"),S("bg-etf-btc-total"),S("bg-stablecoin-supply")]);
+  el.innerHTML=box("Exchange net flow (7-day avg, USD)","Outflows minus inflows across tracked exchanges. Green bars = net withdrawals (coins leaving), red = net deposits.",{id:"c-xf"})+box("BTC on exchanges","Coin Metrics exchange supply.",{id:"c-xs"})+box("Spot ETF daily flow (US)","Net creations minus redemptions across US spot Bitcoin ETFs, in BTC. Source: Farside.",{id:"c-etf"})+box("BTC held by US spot ETFs","",{id:"c-etfh"})+box("Stablecoin supply","Total USD stablecoins in circulation (DefiLlama). Dry powder that can rotate into BTC.",{id:"c-stb"})+box("Coinbase premium","Coinbase BTC-USD vs Binance BTC-USDT daily close. Positive = US buyers paying up.",{id:"c-cbp"});
+  const [fi,fo,xs,ef0,eh0,st0,fs,ll,cbp]=await Promise.all([S("cm-FlowInExUSD"),S("cm-FlowOutExUSD"),S("cm-SplyExNtv"),S("bg-etf-flow-btc"),S("bg-etf-btc-total"),S("bg-stablecoin-supply"),S("farside-etf"),S("llama-stables"),S("cb-premium")]);
+  const fsB=combine(fs,B.price,(m,p)=>m*1e6/p),ef=fsB||ef0;
+  let eh=eh0,ehNote="BGeometrics.";if(!eh&&fsB){let c=619220;eh={t:[],v:[]};fsB.t.forEach((t,i)=>{c+=fsB.v[i];eh.t.push(t);eh.v.push(c)});ehNote="Estimate: GBTC's 619K BTC at launch plus cumulative Farside flows converted at each day's price."}
+  $("c-etfh").querySelector("h3").insertAdjacentHTML("afterend",`<div class="lead">${ehNote}</div>`);
+  const st=ll||st0;
   chart($("c-xf"),[{name:"Net flow",d:sma(combine(fo,fi,(o,i)=>o-i),7)}],{bars:true,zero:true,fmt:v=>usd(v)});
   chart($("c-xs"),[{name:"On exchanges",d:xs}],{fmt:v=>num(v,0)+" ₿"});
   chart($("c-etf"),[{name:"ETF flow",d:ef}],{bars:true,zero:true,fmt:v=>num(v,0)+" ₿"});
   chart($("c-etfh"),[{name:"ETF holdings",d:eh}],{fmt:v=>num(v,0)+" ₿"});
   chart($("c-stb"),[{name:"Stablecoins",d:st}],{fmt:v=>usd(v)});
+  chart($("c-cbp"),[{name:"Premium 7d",d:sma(cbp,7)}],{bars:true,zero:true,fmt:v=>v.toFixed(3)+"%"});
 },
 async mine(el){
   el.innerHTML=box("Hashrate & hash ribbons","30-day vs 60-day average hashrate. 30 below 60 = miner capitulation.",{id:"c-hr"})+box("Difficulty","",{id:"c-diff"})+box("Puell multiple","Daily issuance value ÷ its 365-day average.",{id:"c-pu"})+box("Hashprice","Miner revenue per unit of hashpower (BGeometrics).",{id:"c-hp"})+box("Miner revenue (USD/day, 30d avg)","Block subsidy plus fees.",{id:"c-rev"})+box("Fees as share of miner revenue","",{id:"c-fee"});
@@ -415,7 +445,7 @@ async mine(el){
   const h=hr?{t:hr.t,v:hr.v.map(hashEH)}:mphr?{t:mphr.t,v:mphr.v.map(hashEH)}:null;
   chart($("c-hr"),[{name:"30D",d:sma(h,30)},{name:"60D",d:sma(h,60),c:2}],{fmt:v=>num(v,0)+" EH"});
   chart($("c-diff"),[{name:"Difficulty",d:df&&{t:df.t,v:df.v.map(v=>v/1e12)}}],{fmt:v=>num(v,1)+"T"});
-  chart($("c-pu"),[{name:"Puell",d:combine(iss,sma(iss,365),(a,b)=>a/b)}],{refs:[{y:.5,label:"0.5"},{y:4,label:"4"}],fmt:v=>v.toFixed(2)});
+  chart($("c-pu"),[{name:"Puell",d:combine(iss,sma(iss,365),(a,b)=>a/b)}],{zones:ZN.puell,fmt:v=>v.toFixed(2)});
   chart($("c-hp"),[{name:"Hashprice",d:hp}],{fmt:v=>num(v,2)});
   chart($("c-rev"),[{name:"Revenue",d:sma(rev,30)}],{fmt:v=>usd(v)});
   chart($("c-fee"),[{name:"Fee share",d:sma(combine(fee,rev,(a,b)=>a/b*100),30)}],{fmt:v=>v.toFixed(1)+"%"});
@@ -430,12 +460,12 @@ async net(el){
   chart($("c-fees"),[{name:"Fees",d:sma(f,7)}],{fmt:v=>usd(v)});
 },
 async deriv(el){
-  el.innerHTML=box("Futures open interest","",{id:"c-oi"})+box("Funding rate (7-day average)","Positive = longs pay shorts.",{id:"c-fr"})+box("Liquidations per day","",{id:"c-liq"})+box("Fear & Greed index","",{id:"c-fg"});
-  const [oi,fr,lq,fg]=await Promise.all(["bg-open-interest-futures","bg-funding-rate","bg-btc-liquidations-1d","bg-fear-greed"].map(id=>get(id)));
+  el.innerHTML=box("Futures open interest","",{id:"c-oi"})+box("Funding rate (7-day average)","Positive = longs pay shorts.",{id:"c-fr"})+box("Liquidations per day","",{id:"c-liq"})+box("Fear & Greed index","alternative.me, daily since 2018. 0 = extreme fear, 100 = extreme greed.",{id:"c-fg"});
+  const [oi,fr,lq,fg]=await Promise.all(["bg-open-interest-futures","bg-funding-rate","bg-btc-liquidations-1d","fng"].map(id=>get(id)));
   chart($("c-oi"),[{name:"Open interest",d:col(oi)}],{fmt:v=>usd(v)});
   chart($("c-fr"),[{name:"Funding",d:sma(col(fr),7)}],{zero:true,refs:[{y:0,label:"0"}],fmt:v=>(Math.abs(v)<1?(v*100).toFixed(3):v.toFixed(3))+"%"});
   chart($("c-liq"),lq?lq.cols.map((c,i)=>({name:c.replace(/_/g," "),d:col(lq,i)})):[],{fmt:v=>num(v,0)});
-  chart($("c-fg"),[{name:"Fear & Greed",d:col(fg)}],{refs:[{y:25,label:"25 fear"},{y:75,label:"75 greed"}],fmt:v=>v.toFixed(0)});
+  chart($("c-fg"),[{name:"Fear & Greed",d:col(fg)},{name:"30d avg",d:sma(col(fg),30)}],{zones:ZN.fg,zfit:[0,100],fmt:v=>v.toFixed(0)});
 },
 async live(el){
   const mp="https://mempool.space/api";
