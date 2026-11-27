@@ -49,10 +49,11 @@ async function getJSON(url, tries = 3) {
 }
 
 // ---------- Coin Metrics Community ----------
+// Community-tier metrics only (CapRealUSD, FeeTotUSD, RevUSD, NVTAdj90, TxTfrValAdjUSD, SplyAct* return 403;
+// realized cap, USD fees and miner revenue are derived in the page instead).
 const CM = [
-  "PriceUSD", "CapMrktCurUSD", "CapRealUSD", "CapMVRVCur", "SplyCur", "AdrActCnt", "TxCnt", "TxTfrValAdjUSD",
-  "FeeTotUSD", "FeeTotNtv", "HashRate", "DiffLast", "IssTotNtv", "IssTotUSD", "RevUSD", "NVTAdj90",
-  "FlowInExUSD", "FlowOutExUSD", "SplyExNtv", "BlkCnt", "SplyAct1yr", "SplyAct10yr", "CapAct1yrUSD",
+  "PriceUSD", "CapMrktCurUSD", "CapMVRVCur", "SplyCur", "AdrActCnt", "TxCnt", "FeeTotNtv", "HashRate",
+  "IssTotNtv", "IssTotUSD", "FlowInExUSD", "FlowOutExUSD", "SplyExNtv", "BlkCnt",
 ];
 async function coinMetrics() {
   console.log("Coin Metrics");
@@ -77,31 +78,55 @@ async function coinMetrics() {
 // ---------- BGeometrics (rotating cursor) ----------
 export const BG = [
   // valuation & cohorts
-  "sth-mvrv", "sth-realized-price", "lth-realized-price", "sopr", "sth-sopr", "nupl", "profit-loss",
+  "sth-mvrv", "sth-realized-price", "lth-realized-price", "sopr", "sth-sopr", "nupl", "supply-profit", "supply-loss",
   "mvrv-zscore", "lth-mvrv", "lth-sopr", "nupl-sth", "nupl-lth", "true-market-mean", "investor-price",
   "realized-profit", "realized-loss", "hodl-waves-supply", "puell-multiple", "aviv",
   // behaviour, miners, flows, derivatives
-  "cdd", "vdd-multiple", "hashribbons", "hashprice", "etf-flow-btc", "etf-btc-total", "stablecoin-supply",
+  "nvts", "cdd", "vdd-multiple", "hashribbons", "hashprice", "etf-flow-btc", "etf-btc-total", "stablecoin-supply",
   "funding-rate", "open-interest-futures", "btc-liquidations-1d", "fear-greed",
   // supply distribution
   "coins-addr-1-BTC", "coins-addr-10-1-BTC", "coins-addr-100-10-BTC", "coins-addr-1K-100-BTC",
   "coins-addr-10K-1K-BTC", "coins-addr-10K-BTC",
 ];
+// Date key differs by endpoint (d, theDay, unixTs, ...): pick it by name or by value shape.
+const DATE_RE = /^\d{4}-\d{2}-\d{2}/;
+function dateKey(r) {
+  const ks = Object.keys(r);
+  return ks.find((k) => /^(unixts|timestamp|time|ts)$/i.test(k) && Number(r[k]) > 1e9)
+    || ks.find((k) => typeof r[k] === "string" && DATE_RE.test(r[k]))
+    || ks.find((k) => /date|day|time/i.test(k));
+}
 function normalizeBG(arr) {
   if (!Array.isArray(arr)) arr = arr?.data || [];
   if (!arr.length) throw new Error("empty");
-  const skip = new Set(["d", "date", "day", "unixTs", "unixts", "timestamp", "time", "id"]);
+  const dk = dateKey(arr.at(-1));
+  if (!dk) throw new Error("no date key in " + Object.keys(arr.at(-1)).join(","));
+  const skip = new Set(["id", dk]);
+  for (const k of Object.keys(arr.at(-1))) if (typeof arr.at(-1)[k] === "string" && DATE_RE.test(arr.at(-1)[k])) skip.add(k);
+  if ("unixTs" in arr.at(-1)) skip.add("unixTs");
   const cols = [];
   for (const r of arr.slice(-50)) for (const [k, v] of Object.entries(r))
-    if (!skip.has(k) && !cols.includes(k) && v !== null && v !== "" && !isNaN(Number(v))) cols.push(k);
-  const rows = arr.map((r) => [day(r.unixTs ?? r.d ?? r.date ?? r.time), ...cols.map((c) => round(r[c] == null || r[c] === "" ? NaN : Number(r[c])))]);
+    if (!skip.has(k) && !cols.includes(k) && v !== null && v !== "" && typeof v !== "boolean" && !isNaN(Number(v))) cols.push(k);
+  const rows = arr.map((r) => {
+    const t = r[dk], dd = typeof t === "string" && !DATE_RE.test(t) ? Number(t) : t;
+    return [day(dd), ...cols.map((c) => round(r[c] == null || r[c] === "" ? NaN : Number(r[c])))];
+  }).filter((r) => Number.isFinite(r[0]));
+  if (!rows.length) throw new Error("dates unparsed via " + dk);
   return { cols, rows };
 }
 async function bgeometrics() {
   const n = Math.min(BG_PER_RUN, BG.length);
-  console.log(`BGeometrics: ${n} endpoints from cursor ${meta.bgCursor}`);
-  for (let i = 0; i < n; i++) {
+  // Repair first: series saved without usable dates, or never fetched successfully.
+  const repair = BG.filter((ep) => { const m = meta.metrics["bg-" + ep]; return m && (m.last == null); }).slice(0, n);
+  const rot = [];
+  for (let i = 0; rot.length < n - repair.length && i < BG.length; i++) {
     const ep = BG[(meta.bgCursor + i) % BG.length];
+    if (!repair.includes(ep)) rot.push(ep);
+  }
+  const queue = [...repair, ...rot];
+  console.log(`BGeometrics: repair [${repair.join(", ")}] + ${rot.length} from cursor ${meta.bgCursor}`);
+  for (let i = 0; i < queue.length; i++) {
+    const ep = queue[i];
     const id = "bg-" + ep;
     try {
       const j = await getJSON(`https://bitcoin-data.com/v1/${ep}`, 2);
@@ -114,7 +139,7 @@ async function bgeometrics() {
     }
     await sleep(1500);
   }
-  meta.bgCursor = (meta.bgCursor + n) % BG.length;
+  meta.bgCursor = (meta.bgCursor + rot.length) % BG.length;
 }
 
 // ---------- mempool.space snapshot ----------

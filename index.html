@@ -162,7 +162,7 @@ const cache={};
 function get(id){return cache[id]||(cache[id]=fetch(DATA+"m/"+id+".json?v="+(META?.updated||"")).then(r=>r.ok?r.json():null).catch(()=>null))}
 let META=null;
 const DAY=864e5;
-function col(d,c=0){if(!d)return null;const i=typeof c==="string"?d.cols.indexOf(c):c;if(i<0)return null;const t=[],v=[];for(const r of d.rows){const x=r[i+1];if(x!=null&&isFinite(x)){t.push(r[0]);v.push(x)}}return t.length?{t,v}:null}
+function col(d,c=0){if(!d)return null;const i=typeof c==="string"?d.cols.indexOf(c):c;if(i<0)return null;const t=[],v=[];for(const r of d.rows){const x=r[i+1];if(r[0]!=null&&x!=null&&isFinite(x)){t.push(r[0]);v.push(x)}}return t.length?{t,v}:null}
 function bgCol(d,want){if(!d)return null;const k=d.cols.find(c=>c.toLowerCase().replace(/[^a-z0-9]/g,"")===want.replace(/[^a-z0-9]/g,""))||d.cols[0];return col(d,k)}
 async function S(id,c){const d=await get(id);return id.startsWith("bg-")?bgCol(d,c||id.slice(3)):col(d,c||0)}
 function map(s){const m=new Map();if(s)s.t.forEach((t,i)=>m.set(t,s.v[i]));return m}
@@ -250,19 +250,20 @@ const body=k=>$(k).querySelector(".body");
 
 /* ---------- sections ---------- */
 async function base(){
-  const [price,mc,rc,sply,mvrvCM]=await Promise.all([S("cm-PriceUSD"),S("cm-CapMrktCurUSD"),S("cm-CapRealUSD"),S("cm-SplyCur"),S("cm-CapMVRVCur")]);
-  const rp=combine(rc,sply,(a,b)=>a/b),mvrv=mvrvCM||combine(mc,rc,(a,b)=>a/b);
+  const [price,mc,sply,mvrv]=await Promise.all([S("cm-PriceUSD"),S("cm-CapMrktCurUSD"),S("cm-SplyCur"),S("cm-CapMVRVCur")]);
+  const rc=combine(mc,mvrv,(a,b)=>a/b),rp=combine(rc,sply,(a,b)=>a/b);
   return {price,mc,rc,sply,rp,mvrv,z:stdz(mc,rc)};
 }
 let B;
+async function profitPct(){const [a,b]=await Promise.all([S("bg-supply-profit"),S("bg-supply-loss")]);return combine(a,b,(x,y)=>x/(x+y)*100)}
 const R={
 async snap(el){
-  const [sthRP,lthRP,sthMV,prof,nupl,sopr,sthSopr,fg,iss,hr]=await Promise.all([S("bg-sth-realized-price"),S("bg-lth-realized-price"),S("bg-sth-mvrv"),S("bg-profit-loss"),S("bg-nupl"),S("bg-sopr"),S("bg-sth-sopr"),S("bg-fear-greed"),S("cm-IssTotUSD"),S("cm-HashRate")]);
+  const [sthRP,lthRP,sthMV,prof,nupl,sopr,sthSopr,fg,iss,hr]=await Promise.all([S("bg-sth-realized-price"),S("bg-lth-realized-price"),S("bg-sth-mvrv"),profitPct(),S("bg-nupl"),S("bg-sopr"),S("bg-sth-sopr"),S("bg-fear-greed"),S("cm-IssTotUSD"),S("cm-HashRate")]);
   const p=last(B.price),may=p&&sma(B.price,200)?p/last(sma(B.price,200)):null,pu=iss&&sma(iss,365)?last(iss)/last(sma(iss,365)):null;
   const ch=v=>v==null?"":`<i class="${v>=0?"z-good":"z-bad"}">${v>=0?"▲":"▼"} ${pct(Math.abs(v))}</i>`;
   const vs=(a,b)=>a&&b?"Spot "+(a>=b?"+":"−")+pct(Math.abs(a/b-1)*100)+(a>=b?" above":" below"):"";
   const p7=ago(B.price,7),p30=ago(B.price,30);
-  const nv=last(nupl),pr=pctish(last(prof));
+  const nv=last(nupl),pr=last(prof);
   const rows=[
     ["MVRV",num(last(B.mvrv)),"mvrv",last(B.mvrv),lastT(B.mvrv)],
     ["MVRV Z-score",num(last(B.z)),"z",last(B.z),lastT(B.z)],
@@ -283,7 +284,7 @@ async snap(el){
     <div class="kpi"><span>LTH cost basis</span><b>${usd(last(lthRP))}</b><i class="z-n">${vs(p,last(lthRP))}</i></div>
     <div class="kpi"><span>Market cap</span><b>${usd(last(B.mc))}</b></div>
     <div class="kpi"><span>Realized cap</span><b>${usd(last(B.rc))}</b><i class="z-n">30d ${pct(ago(B.rc,30)?(last(B.rc)/ago(B.rc,30)-1)*100:null,2)}</i></div>
-    <div class="kpi"><span>Hashrate</span><b>${hr?num(hashEH(last(hr)),0)+" EH/s":"—"}</b></div>
+    <div class="kpi"><span>Hashrate</span><b>${hr?num(hashEH(last(sma(hr,7))),0)+" EH/s":"—"}</b><i class="z-n">7-day avg</i></div>
   </div>
   <h3>Signal scorecard</h3>
   <div class="lead">${cnt?`<b>${sc>0?"▲ Leaning value":sc<0?"▼ Leaning heated":"● Mixed"}</b> — ${vote.filter(x=>x>0).length} value, ${vote.filter(x=>x<0).length} heated, ${cnt-vote.filter(x=>x).length} neutral of ${cnt} signals.`:""} Zones use conventional cycle thresholds.</div>
@@ -301,16 +302,16 @@ async val(el){
 },
 async pnl(el){
   el.innerHTML=box("NUPL","Unrealized profit as a share of market cap, for all holders and each cohort.",{id:"c-nupl"})+box("Supply in profit","Share of circulating BTC whose last move was below today's price.",{id:"c-prof"})+box("SOPR (7-day average)","Above 1 = coins moved at a profit; below 1 = at a loss.",{id:"c-sopr"})+box("Net realized profit / loss (USD)","Realized profit minus realized loss, 7-day average.",{id:"c-nrpl"});
-  const [n,ns,nl,pf,so,ss,ls,rp,rl]=await Promise.all(["bg-nupl","bg-nupl-sth","bg-nupl-lth","bg-profit-loss","bg-sopr","bg-sth-sopr","bg-lth-sopr","bg-realized-profit","bg-realized-loss"].map(id=>S(id)));
+  const [n,ns,nl,so,ss,ls,rp,rl]=await Promise.all(["bg-nupl","bg-nupl-sth","bg-nupl-lth","bg-sopr","bg-sth-sopr","bg-lth-sopr","bg-realized-profit","bg-realized-loss"].map(id=>S(id)));
+  const pf=await profitPct();
   chart($("c-nupl"),[{name:"NUPL",d:n},{name:"STH",d:ns},{name:"LTH",d:nl}],{refs:[{y:0,label:"0"},{y:.75,label:"0.75 euphoria"}],fmt:v=>v.toFixed(2)});
-  chart($("c-prof"),[{name:"In profit",d:pf&&{t:pf.t,v:pf.v.map(pctish)}}],{refs:[{y:50,label:"50%"}],fmt:v=>v.toFixed(0)+"%"});
+  chart($("c-prof"),[{name:"In profit",d:pf}],{refs:[{y:50,label:"50%"}],fmt:v=>v.toFixed(0)+"%"});
   chart($("c-sopr"),[{name:"SOPR",d:sma(so,7)},{name:"STH",d:sma(ss,7)},{name:"LTH",d:sma(ls,7)}],{refs:[{y:1,label:"1.0"}],fmt:v=>v.toFixed(3)});
   chart($("c-nrpl"),[{name:"Net realized P/L",d:sma(combine(rp,rl,(a,b)=>a-Math.abs(b)),7)}],{bars:true,zero:true,fmt:v=>usd(v)});
 },
 async hold(el){
-  el.innerHTML=box("Dormant vs active supply","Share of supply that has not moved in over a year (Coin Metrics active supply).",{id:"c-dorm"})+`<div id="hw"></div><div id="coh"></div>`+box("Coin days destroyed (30-day average)","Spikes mean old coins are moving.",{id:"c-cdd"})+box("VDD multiple","Value days destroyed vs its 1-year average. High = old coins selling into strength.",{id:"c-vdd"});
-  const [a1,sp,cdd,vdd,hw]=await Promise.all([S("cm-SplyAct1yr"),S("cm-SplyCur"),S("bg-cdd"),S("bg-vdd-multiple"),get("bg-hodl-waves-supply")]);
-  chart($("c-dorm"),[{name:"Unmoved 1y+",d:combine(a1,sp,(a,b)=>(1-a/b)*100)}],{fmt:v=>v.toFixed(1)+"%"});
+  el.innerHTML=`<div id="hw"></div><div id="coh"></div>`+box("Coin days destroyed (30-day average)","Spikes mean old coins are moving.",{id:"c-cdd"})+box("VDD multiple","Value days destroyed vs its 1-year average. High = old coins selling into strength.",{id:"c-vdd"});
+  const [cdd,vdd,hw]=await Promise.all([S("bg-cdd"),S("bg-vdd-multiple"),get("bg-hodl-waves-supply")]);
   chart($("c-cdd"),[{name:"CDD 30d",d:sma(cdd,30)}],{fmt:v=>num(v,0)});
   chart($("c-vdd"),[{name:"VDD multiple",d:vdd}],{refs:[{y:1,label:"1.0"},{y:2.9,label:"2.9 hot"}],fmt:v=>v.toFixed(2)});
   if(hw&&hw.rows.length){const r=hw.rows.at(-1),o=hw.rows.find(x=>x[0]>=r[0]-90)||hw.rows[0];const vals=hw.cols.map((c,i)=>[c,pctish(r[i+1]),pctish(o[i+1])]).filter(x=>x[1]!=null);const mx=Math.max(...vals.map(x=>x[1]));
@@ -332,7 +333,8 @@ async flow(el){
 },
 async mine(el){
   el.innerHTML=box("Hashrate & hash ribbons","30-day vs 60-day average hashrate. 30 below 60 = miner capitulation.",{id:"c-hr"})+box("Difficulty","",{id:"c-diff"})+box("Puell multiple","Daily issuance value ÷ its 365-day average.",{id:"c-pu"})+box("Hashprice","Miner revenue per unit of hashpower (BGeometrics).",{id:"c-hp"})+box("Miner revenue (USD/day, 30d avg)","Block subsidy plus fees.",{id:"c-rev"})+box("Fees as share of miner revenue","",{id:"c-fee"});
-  const [hr,mphr,df,iss,hp,rev,fee]=await Promise.all([S("cm-HashRate"),S("mp-hashrate"),S("mp-difficulty"),S("cm-IssTotUSD"),S("bg-hashprice"),S("cm-RevUSD"),S("cm-FeeTotUSD")]);
+  const [hr,mphr,df,iss,hp,feeN]=await Promise.all([S("cm-HashRate"),S("mp-hashrate"),S("mp-difficulty"),S("cm-IssTotUSD"),S("bg-hashprice"),S("cm-FeeTotNtv")]);
+  const fee=combine(feeN,B.price,(a,b)=>a*b),rev=combine(iss,fee,(a,b)=>a+b);
   const h=hr?{t:hr.t,v:hr.v.map(hashEH)}:mphr?{t:mphr.t,v:mphr.v.map(hashEH)}:null;
   chart($("c-hr"),[{name:"30D",d:sma(h,30)},{name:"60D",d:sma(h,60),c:2}],{fmt:v=>num(v,0)+" EH"});
   chart($("c-diff"),[{name:"Difficulty",d:df&&{t:df.t,v:df.v.map(v=>v/1e12)}}],{fmt:v=>num(v,1)+"T"});
@@ -342,12 +344,12 @@ async mine(el){
   chart($("c-fee"),[{name:"Fee share",d:sma(combine(fee,rev,(a,b)=>a/b*100),30)}],{fmt:v=>v.toFixed(1)+"%"});
 },
 async net(el){
-  el.innerHTML=box("Active addresses (30d avg)","",{id:"c-aa"})+box("Transactions per day (30d avg)","",{id:"c-tx"})+box("Adjusted transfer volume (USD, 30d avg)","",{id:"c-tv"})+box("NVT (90-day)","Market cap ÷ transfer volume. High = price running ahead of usage.",{id:"c-nvt"})+box("Total fees per day (USD, 7d avg)","",{id:"c-fees"});
-  const [aa,tx,tv,nvt,f]=await Promise.all(["cm-AdrActCnt","cm-TxCnt","cm-TxTfrValAdjUSD","cm-NVTAdj90","cm-FeeTotUSD"].map(id=>S(id)));
+  el.innerHTML=box("Active addresses (30d avg)","",{id:"c-aa"})+box("Transactions per day (30d avg)","",{id:"c-tx"})+box("NVT signal","Market cap ÷ 90-day average transfer volume (BGeometrics). High = price running ahead of usage.",{id:"c-nvt"})+box("Total fees per day (USD, 7d avg)","",{id:"c-fees"});
+  const [aa,tx,nvt,fN]=await Promise.all(["cm-AdrActCnt","cm-TxCnt","bg-nvts","cm-FeeTotNtv"].map(id=>S(id)));
+  const f=combine(fN,B.price,(a,b)=>a*b);
   chart($("c-aa"),[{name:"Active addresses",d:sma(aa,30)}],{fmt:v=>num(v,0)});
   chart($("c-tx"),[{name:"Tx/day",d:sma(tx,30)}],{fmt:v=>num(v,0)});
-  chart($("c-tv"),[{name:"Transfer volume",d:sma(tv,30)}],{fmt:v=>usd(v)});
-  chart($("c-nvt"),[{name:"NVT 90",d:nvt}],{fmt:v=>v.toFixed(0)});
+  chart($("c-nvt"),[{name:"NVT signal",d:nvt}],{fmt:v=>v.toFixed(0)});
   chart($("c-fees"),[{name:"Fees",d:sma(f,7)}],{fmt:v=>usd(v)});
 },
 async deriv(el){
