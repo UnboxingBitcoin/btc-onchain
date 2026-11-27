@@ -91,6 +91,7 @@ td.n,th.n{text-align:right;font-family:"Space Mono",monospace;white-space:nowrap
 .drl button{font:inherit;font-weight:700;background:var(--card);color:var(--ink);border:2px solid var(--line);border-radius:8px;padding:0 6px;box-shadow:var(--shadow-sm)}
 .drl button:active{transform:translate(2px,2px);box-shadow:none}
 .gbar{margin:6px 0 0;background:var(--card);border:2px solid var(--line);border-radius:12px;padding:6px 10px 4px;box-shadow:var(--shadow-sm)}
+table.tight td,table.tight th{padding-left:3px;padding-right:3px;font-size:11.5px;white-space:nowrap}
 .readout{font-family:"Space Mono",monospace;font-size:11.5px;color:var(--muted);min-height:17px}
 .empty{color:var(--muted);font-size:13px;font-family:"Space Mono",monospace;padding:20px 4px;text-align:center;border:2px dashed var(--hair);border-radius:12px}
 .bars .r{display:grid;grid-template-columns:88px minmax(0,1fr) 62px;gap:8px;align-items:center;font-size:12.5px;margin:5px 0}
@@ -385,8 +386,8 @@ async hold(el){
   const CO=[["coins-addr-10K-BTC","10K+ ₿"],["coins-addr-10K-1K-BTC","1K–10K ₿"],["coins-addr-1K-100-BTC","100–1K ₿"],["coins-addr-100-10-BTC","10–100 ₿"],["coins-addr-10-1-BTC","1–10 ₿"],["coins-addr-1-BTC","< 1 ₿"]];
   let cs=await Promise.all(CO.map(([id])=>S("bg-"+id)));let byUtxo=false;
   if(!cs.some(Boolean)&&UMETA){byUtxo=true;const K=["sup_gt1k","sup_100_1k","sup_10_100","sup_1_10","sup_0.1_1","sup_lt0.1"];CO.splice(0,6,["","1K+ ₿"],["","100 – 1K ₿"],["","10 – 100 ₿"],["","1 – 10 ₿"],["","0.1 – 1 ₿"],["","< 0.1 ₿"]);cs=await Promise.all(K.map(k=>U("bands",k)))}
-  const rows=CO.map(([,n],i)=>{const s=cs[i];if(!s)return"";const l=last(s),a30=ago(s,30),a90=ago(s,90);const d=(x)=>x==null?"—":`<span class="${l-x>=0?"z-good":"z-bad"}">${l-x>=0?"+":"−"}${num(Math.abs(l-x),0)}</span>`;return`<tr><td>${n}</td><td class="n">${btc(l)}</td><td class="n">${d(a30)}</td><td class="n">${d(a90)}</td></tr>`}).join("");
-  $("coh").innerHTML=(byUtxo?`<h3>Supply by UTXO size</h3><div class="lead">BTC by the size of each coin (UTXO), from our own chain scan. True wallet-balance bands arrive with the December address backfill.</div>`:`<h3>Supply by wallet size</h3><div class="lead">BTC held by address balance band. Exchanges and ETFs sit in the large bands.</div>`)+(rows?`<table><thead><tr><th>Band</th><th class="n">Holds</th><th class="n">30d</th><th class="n">90d</th></tr></thead><tbody>${rows}</tbody></table>`:`<div class="empty">No data yet — appears after the next data run.</div>`);
+  const rows=CO.map(([,n],i)=>{const s=cs[i];if(!s)return"";const l=last(s),a7=ago(s,7),a30=ago(s,30),a90=ago(s,90),a180=ago(s,180);const d=(x)=>x==null?"—":`<span class="${l-x>=0?"z-good":"z-bad"}">${l-x>=0?"+":"−"}${num(Math.abs(l-x),0)}</span>`;return`<tr><td>${n}</td><td class="n">${btc(l)}</td><td class="n">${d(a7)}</td><td class="n">${d(a30)}</td><td class="n">${d(a90)}</td><td class="n">${d(a180)}</td></tr>`}).join("");
+  $("coh").innerHTML=(byUtxo?`<h3>Supply by UTXO size</h3><div class="lead">BTC by the size of each coin (UTXO), from our own chain scan. True wallet-balance bands arrive with the December address backfill.</div>`:`<h3>Supply by wallet size</h3><div class="lead">BTC held by address balance band. Exchanges and ETFs sit in the large bands.</div>`)+(rows?`<table class="tight"><thead><tr><th>Band</th><th class="n">Holds</th><th class="n">7d</th><th class="n">30d</th><th class="n">90d</th><th class="n">180d</th></tr></thead><tbody>${rows}</tbody></table>`:`<div class="empty">No data yet — appears after the next data run.</div>`);
 },
 async utxo(el){
   if(!UMETA){el.innerHTML=`<div class="empty">UTXO data is not published yet.</div>`;return}
