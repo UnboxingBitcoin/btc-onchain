@@ -1,0 +1,300 @@
+{
+ "metrics": {
+  "cm-PriceUSD": {
+   "src": "coinmetrics",
+   "ok": true,
+   "at": "2026-11-28T12:16:31.685Z",
+   "last": 20784,
+   "n": 5810
+  },
+  "cm-CapMrktCurUSD": {
+   "src": "coinmetrics",
+   "ok": true,
+   "at": "2026-11-28T12:16:31.685Z",
+   "last": 20784,
+   "n": 5810
+  },
+  "cm-CapMVRVCur": {
+   "src": "coinmetrics",
+   "ok": true,
+   "at": "2026-11-28T12:16:31.685Z",
+   "last": 20784,
+   "n": 5810
+  },
+  "cm-SplyCur": {
+   "src": "coinmetrics",
+   "ok": true,
+   "at": "2026-11-28T12:16:31.685Z",
+   "last": 20784,
+   "n": 5810
+  },
+  "cm-AdrActCnt": {
+   "src": "coinmetrics",
+   "ok": true,
+   "at": "2026-11-28T12:16:31.685Z",
+   "last": 20784,
+   "n": 5810
+  },
+  "cm-TxCnt": {
+   "src": "coinmetrics",
+   "ok": true,
+   "at": "2026-11-28T12:16:31.685Z",
+   "last": 20784,
+   "n": 5810
+  },
+  "cm-FeeTotNtv": {
+   "src": "coinmetrics",
+   "ok": true,
+   "at": "2026-11-28T12:16:31.685Z",
+   "last": 20784,
+   "n": 5810
+  },
+  "cm-HashRate": {
+   "src": "coinmetrics",
+   "ok": true,
+   "at": "2026-11-28T12:16:31.685Z",
+   "last": 20784,
+   "n": 5810
+  },
+  "cm-IssTotNtv": {
+   "src": "coinmetrics",
+   "ok": true,
+   "at": "2026-11-28T12:16:31.685Z",
+   "last": 20784,
+   "n": 5810
+  },
+  "cm-IssTotUSD": {
+   "src": "coinmetrics",
+   "ok": true,
+   "at": "2026-11-28T12:16:31.685Z",
+   "last": 20784,
+   "n": 5810
+  },
+  "cm-FlowInExUSD": {
+   "src": "coinmetrics",
+   "ok": true,
+   "at": "2026-11-28T12:16:31.685Z",
+   "last": 20784,
+   "n": 5697
+  },
+  "cm-FlowOutExUSD": {
+   "src": "coinmetrics",
+   "ok": true,
+   "at": "2026-11-28T12:16:31.685Z",
+   "last": 20784,
+   "n": 5697
+  },
+  "cm-SplyExNtv": {
+   "src": "coinmetrics",
+   "ok": true,
+   "at": "2026-11-28T12:16:31.685Z",
+   "last": 20784,
+   "n": 5697
+  },
+  "cm-BlkCnt": {
+   "src": "coinmetrics",
+   "ok": true,
+   "at": "2026-11-28T12:16:31.685Z",
+   "last": 20784,
+   "n": 5810
+  },
+  "bg-sth-mvrv": {
+   "src": "bgeometrics",
+   "ok": true,
+   "at": "2026-11-27T08:46:01.924Z",
+   "last": 20777,
+   "n": 1455
+  },
+  "bg-sth-realized-price": {
+   "src": "bgeometrics",
+   "ok": true,
+   "at": "2026-11-27T11:10:42.521Z",
+   "last": 20777,
+   "n": 1446
+  },
+  "bg-lth-realized-price": {
+   "src": "bgeometrics",
+   "ok": true,
+   "at": "2026-11-27T11:10:42.521Z",
+   "last": 20777,
+   "n": 1446
+  },
+  "bg-sopr": {
+   "src": "bgeometrics",
+   "ok": true,
+   "at": "2026-11-27T08:46:01.924Z",
+   "last": 20777,
+   "n": 1455
+  },
+  "bg-sth-sopr": {
+   "src": "bgeometrics",
+   "ok": true,
+   "at": "2026-11-27T08:46:01.924Z",
+   "last": 20777,
+   "n": 1455
+  },
+  "bg-nupl": {
+   "src": "bgeometrics",
+   "ok": true,
+   "at": "2026-11-27T08:46:01.924Z",
+   "last": 20777,
+   "n": 1455
+  },
+  "bg-profit-loss": {
+   "src": "bgeometrics",
+   "ok": true,
+   "at": "2026-11-27T08:46:01.924Z",
+   "last": 20783,
+   "n": 1461
+  },
+  "mp-hashrate": {
+   "src": "mempool",
+   "ok": true,
+   "at": "2026-11-28T12:16:31.685Z",
+   "last": 20785,
+   "n": 6539
+  },
+  "mp-difficulty": {
+   "src": "mempool",
+   "ok": true,
+   "at": "2026-11-28T12:16:31.685Z",
+   "last": 20784,
+   "n": 471
+  },
+  "fng": {
+   "src": "alternative.me",
+   "ok": true,
+   "at": "2026-11-28T12:16:31.685Z",
+   "last": 20785,
+   "n": 3219
+  },
+  "llama-stables": {
+   "src": "defillama",
+   "ok": true,
+   "at": "2026-11-28T12:16:31.685Z",
+   "last": 20785,
+   "n": 3287
+  },
+  "farside-etf": {
+   "src": "farside",
+   "ok": true,
+   "at": "2026-11-28T12:16:31.685Z",
+   "last": 20784,
+   "n": 739
+  },
+  "cb-premium": {
+   "src": "coinbase/binance",
+   "ok": true,
+   "at": "2026-11-28T12:16:31.685Z",
+   "last": 20785,
+   "n": 1500
+  },
+  "bg-coins-addr-100-10-BTC": {
+   "src": "bgeometrics",
+   "ok": true,
+   "at": "2026-11-27T11:10:42.521Z",
+   "last": 20783,
+   "n": 1437
+  },
+  "bg-coins-addr-1K-100-BTC": {
+   "src": "bgeometrics",
+   "ok": true,
+   "at": "2026-11-27T11:10:42.521Z",
+   "last": 20783,
+   "n": 1437
+  },
+  "bg-coins-addr-10K-1K-BTC": {
+   "src": "bgeometrics",
+   "ok": true,
+   "at": "2026-11-27T11:10:42.521Z",
+   "last": 20783,
+   "n": 1437
+  },
+  "bg-coins-addr-10K-BTC": {
+   "src": "bgeometrics",
+   "ok": true,
+   "at": "2026-11-27T11:10:42.521Z",
+   "last": 20783,
+   "n": 1437
+  },
+  "bg-true-market-mean": {
+   "src": "bgeometrics",
+   "ok": true,
+   "at": "2026-11-27T11:10:42.521Z",
+   "last": 20777,
+   "n": 1455
+  },
+  "bg-etf-btc-total": {
+   "src": "bgeometrics",
+   "ok": true,
+   "at": "2026-11-28T12:16:31.685Z",
+   "last": 20782,
+   "n": 710
+  },
+  "bg-etf-flow-btc": {
+   "src": "bgeometrics",
+   "ok": true,
+   "at": "2026-11-28T12:16:31.685Z",
+   "last": 20782,
+   "n": 710
+  },
+  "bg-funding-rate": {
+   "src": "bgeometrics",
+   "ok": true,
+   "at": "2026-11-28T12:16:31.685Z",
+   "last": 20777,
+   "n": 1454
+  },
+  "bg-open-interest-futures": {
+   "src": "bgeometrics",
+   "ok": true,
+   "at": "2026-11-28T12:16:31.685Z",
+   "last": 20782,
+   "n": 1445
+  },
+  "bg-btc-liquidations-1d": {
+   "src": "bgeometrics",
+   "ok": true,
+   "at": "2026-11-27T23:43:22.360Z",
+   "last": 20783,
+   "n": 236
+  },
+  "bg-coins-addr-1-BTC": {
+   "src": "bgeometrics",
+   "ok": true,
+   "at": "2026-11-27T23:43:22.360Z",
+   "last": 20783,
+   "n": 1437
+  },
+  "bg-coins-addr-10-1-BTC": {
+   "src": "bgeometrics",
+   "ok": true,
+   "at": "2026-11-27T23:43:22.360Z",
+   "last": 20783,
+   "n": 1437
+  },
+  "bg-investor-price": {
+   "src": "bgeometrics",
+   "ok": true,
+   "at": "2026-11-28T12:16:31.685Z",
+   "last": 20778,
+   "n": 1448
+  },
+  "bg-hashprice": {
+   "src": "bgeometrics",
+   "ok": true,
+   "at": "2026-11-28T12:16:31.685Z",
+   "last": 20778,
+   "n": 1455
+  },
+  "bg-nvts": {
+   "src": "bgeometrics",
+   "ok": true,
+   "at": "2026-11-28T12:16:31.685Z",
+   "last": 20778,
+   "n": 1455
+  }
+ },
+ "bgCursor": 1,
+ "updated": "2026-11-28T12:16:31.685Z"
+}

@@ -1,0 +1,114 @@
+{
+ "updated": "2026-11-27T10:25:36.658980Z",
+ "last_day": 20783,
+ "n_days": 6537,
+ "sth_days": 155,
+ "validation": {
+  "window": "last 4y",
+  "mvrv_median_abs_pct": 0.011111046054146367,
+  "mvrv_p95_abs_pct": 0.02382012134335032,
+  "supply_median_abs_pct": 0.0011709080753763423,
+  "supply_p95_abs_pct": 0.001188540276112482,
+  "mine_mvrv_last": 1.1392441664631274,
+  "cm_mvrv_last": 1.1391995277471378,
+  "mine_supply_last": 20118029.22315927,
+  "cm_supply_last": 20117794.84815327
+ },
+ "groups": {
+  "val": [
+   "price",
+   "market_cap",
+   "supply",
+   "realized_cap",
+   "realized_price",
+   "mvrv",
+   "mvrv_z",
+   "nupl"
+  ],
+  "holders": [
+   "sth_supply",
+   "lth_supply",
+   "sth_rp",
+   "lth_rp",
+   "sth_mvrv",
+   "lth_mvrv",
+   "sth_nupl",
+   "lth_nupl",
+   "pct_in_profit",
+   "pct_in_loss",
+   "avg_age",
+   "liveliness"
+  ],
+  "spent": [
+   "sopr",
+   "asopr",
+   "sth_sopr",
+   "lth_sopr",
+   "realized_profit",
+   "realized_loss",
+   "net_realized_pl",
+   "cdd",
+   "vdd",
+   "sa_cdd",
+   "dormancy",
+   "moved_btc"
+  ],
+  "waves": [
+   "w_lt1d",
+   "w_1d_1w",
+   "w_1w_1m",
+   "w_1m_3m",
+   "w_3m_6m",
+   "w_6m_1y",
+   "w_1y_2y",
+   "w_2y_3y",
+   "w_3y_5y",
+   "w_5y_7y",
+   "w_7y_10y",
+   "w_gt10y"
+  ],
+  "rcwaves": [
+   "rcw_lt1d",
+   "rcw_1d_1w",
+   "rcw_1w_1m",
+   "rcw_1m_3m",
+   "rcw_3m_6m",
+   "rcw_6m_1y",
+   "rcw_1y_2y",
+   "rcw_2y_3y",
+   "rcw_3y_5y",
+   "rcw_5y_7y",
+   "rcw_7y_10y",
+   "rcw_gt10y"
+  ],
+  "bands": [
+   "sup_lt0.1",
+   "sup_0.1_1",
+   "sup_1_10",
+   "sup_10_100",
+   "sup_100_1k",
+   "sup_gt1k",
+   "rcap_lt0.1",
+   "rcap_0.1_1",
+   "rcap_1_10",
+   "rcap_10_100",
+   "rcap_100_1k",
+   "rcap_gt1k"
+  ],
+  "types": [
+   "sup_p2pk",
+   "sup_p2pkh",
+   "sup_p2sh",
+   "sup_segwit_v0",
+   "sup_taproot",
+   "sup_other"
+  ],
+  "miners": [
+   "cb_supply",
+   "cb_spent",
+   "cb_sopr",
+   "cb_cdd"
+  ]
+ },
+ "note": "Self-computed from public BigQuery bitcoin tables; no entity clustering."
+}
